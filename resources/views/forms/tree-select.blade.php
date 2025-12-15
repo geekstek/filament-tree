@@ -6,11 +6,14 @@
     />
 
     @php
-        $componentId = 'treeselect-' . Str::random(8);
         $maxHeight = $getMaxHeight();
+        $options = $getOptions();
+        $statePath = $getStatePath();
+        // 生成基于 options 内容的唯一 key，当 options 变化时强制重新初始化
+        $optionsKey = md5(json_encode($options));
         $config = [
-            'statePath' => $getStatePath(),
-            'options' => $getOptions(),
+            'statePath' => $statePath,
+            'options' => $options,
             'isSingleSelect' => $isSingleSelect(),
             'showTags' => $getShowTags(),
             'isDisabled' => $isDisabled(),
@@ -22,63 +25,75 @@
             'expandSelected' => $getExpandSelected(),
             'openLevel' => $getDefaultOpenLevel(),
             'maxHeight' => $maxHeight,
+            'isLive' => $isLive(),
         ];
     @endphp
 
-    <div
-        wire:ignore
-        x-data="{
-            config: {{ json_encode($config) }},
-            tree: null,
-            initialized: false,
+    {{-- 外层使用 wire:key 来响应 options 变化，触发重新初始化 --}}
+    <div wire:key="tree-select-{{ $statePath }}-{{ $optionsKey }}">
+        {{-- 内层使用 wire:ignore 来防止选择值时重新渲染 --}}
+        <div
+            wire:ignore
+            x-data="{
+                config: {{ json_encode($config) }},
+                tree: null,
+                initialized: false,
+                TreeselectClass: null,
 
-            async init() {
-                await this.$nextTick();
-                await this.initTreeselect();
-            },
+                async init() {
+                    await this.$nextTick();
+                    await this.loadTreeselectModule();
+                    await this.initTreeselect();
+                },
 
-            async initTreeselect() {
-                if (this.initialized) return;
+                async loadTreeselectModule() {
+                    if (this.TreeselectClass) return;
+                    try {
+                        const module = await import('https://cdn.jsdelivr.net/npm/treeselectjs@0.11.0/+esm');
+                        this.TreeselectClass = module.default;
+                    } catch (error) {
+                        console.error('Failed to load TreeSelect module:', error);
+                    }
+                },
 
-                const container = this.$refs.treeContainer;
-                if (!container) return;
+                async initTreeselect() {
+                    if (this.initialized || !this.TreeselectClass) return;
 
-                try {
-                    // 使用动态 import 加载 ESM 模块
-                    const module = await import('https://cdn.jsdelivr.net/npm/treeselectjs@0.11.0/+esm');
-                    const Treeselect = module.default;
+                    const container = this.$refs.treeContainer;
+                    if (!container) return;
 
-                    const initialValue = $wire.get(this.config.statePath) ?? (this.config.isSingleSelect ? null : []);
+                    try {
+                        const initialValue = $wire.get(this.config.statePath) ?? (this.config.isSingleSelect ? null : []);
 
-                    this.tree = new Treeselect({
-                        parentHtmlContainer: container,
-                        value: initialValue,
-                        options: this.config.options,
-                        isSingleSelect: this.config.isSingleSelect,
-                        showTags: this.config.showTags,
-                        disabled: this.config.isDisabled,
-                        placeholder: this.config.placeholder,
-                        direction: 'auto',
-                        clearable: this.config.clearable,
-                        searchable: this.config.searchable,
-                        tagsCountText: this.config.tagsCountText,
-                        emptyText: this.config.emptyText,
-                        expandSelected: this.config.expandSelected,
-                        openLevel: this.config.openLevel,
-                    });
+                        this.tree = new this.TreeselectClass({
+                            parentHtmlContainer: container,
+                            value: initialValue,
+                            options: this.config.options,
+                            isSingleSelect: this.config.isSingleSelect,
+                            showTags: this.config.showTags,
+                            disabled: this.config.isDisabled,
+                            placeholder: this.config.placeholder,
+                            direction: 'auto',
+                            clearable: this.config.clearable,
+                            searchable: this.config.searchable,
+                            tagsCountText: this.config.tagsCountText,
+                            emptyText: this.config.emptyText,
+                            expandSelected: this.config.expandSelected,
+                            openLevel: this.config.openLevel,
+                        });
 
-                    this.tree.srcElement.addEventListener('input', (e) => {
-                        $wire.set(this.config.statePath, e.detail);
-                    });
+                        this.tree.srcElement.addEventListener('input', (e) => {
+                            $wire.set(this.config.statePath, e.detail);
+                        });
 
-                    this.initialized = true;
-                } catch (error) {
-                    console.error('Failed to initialize TreeSelect:', error);
+                        this.initialized = true;
+                    } catch (error) {
+                        console.error('Failed to initialize TreeSelect:', error);
+                    }
                 }
-            }
-        }"
-        class="fi-fo-tree-select"
-    >
+            }"
+            class="fi-fo-tree-select"
+        >
         <div
             x-ref="treeContainer"
             class="treeselect-container"
@@ -267,4 +282,5 @@
             color: rgb(107 114 128);
         }
     </style>
+    </div>
 </x-dynamic-component>

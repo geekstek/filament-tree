@@ -161,7 +161,7 @@
 
     <div
         x-data="{
-            state: $wire.$entangle('{{ $getStatePath() }}'),
+            state: $wire.entangle('{{ $getStatePath() }}'){{ $isLive() ? '.live' : '' }},
             isGlobalDisabled: {{ $isDisabled() ? 'true' : 'false' }},
             defaultExpanded: {{ $getDefaultExpanded() ? 'true' : 'false' }},
             expandSelected: {{ $getExpandSelected() ? 'true' : 'false' }},
