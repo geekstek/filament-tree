@@ -47,7 +47,7 @@
         html.dark .fi-in-tree-entry-toolbar-separator,
         .dark .fi-in-tree-entry-toolbar-separator { color: #3f3f46; }
 
-        .fi-in-tree-entry-content { padding: 0.5rem; max-height: 400px; overflow-y: auto; }
+        .fi-in-tree-entry-content { padding: 0.5rem; overflow-y: auto; }
 
         .fi-in-tree-entry-empty {
             padding: 1.5rem;
@@ -178,7 +178,7 @@
             </button>
         </div>
 
-        <div class="fi-in-tree-entry-content">
+        <div class="fi-in-tree-entry-content" @if($getMaxHeight()) style="max-height: {{ $getMaxHeight() }}" @endif>
             @php
                 $selectedIds = $getState() ?? [];
                 $options = $getTreeOptions();

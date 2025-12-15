@@ -30,6 +30,21 @@ class Tree extends Field
     protected bool | Closure $defaultExpanded = true;
 
     /**
+     * 是否展开已选中的节点
+     */
+    protected bool | Closure $expandSelected = false;
+
+    /**
+     * 默认展开层级 (0 = 全部收起, 1 = 只展开第一层, 以此类推)
+     */
+    protected int | Closure | null $defaultOpenLevel = null;
+
+    /**
+     * 最大高度 (支持 px, vh, rem 等单位)
+     */
+    protected string | int | Closure | null $maxHeight = '400px';
+
+    /**
      * 设置树形选项数据
      */
     public function options(array | Closure $options): static
@@ -90,6 +105,28 @@ class Tree extends Field
     }
 
     /**
+     * 设置是否展开已选中的节点
+     */
+    public function expandSelected(bool | Closure $expand = true): static
+    {
+        $this->expandSelected = $expand;
+
+        return $this;
+    }
+
+    /**
+     * 设置默认展开层级
+     *
+     * @param  int  $level  0 = 全部收起, 1 = 展开第一层, 2 = 展开前两层, 以此类推
+     */
+    public function defaultOpenLevel(int | Closure $level): static
+    {
+        $this->defaultOpenLevel = $level;
+
+        return $this;
+    }
+
+    /**
      * 获取处理后的树形数据
      */
     public function getTreeData(): array
@@ -115,6 +152,53 @@ class Tree extends Field
     public function getDefaultExpanded(): bool
     {
         return $this->evaluate($this->defaultExpanded);
+    }
+
+    /**
+     * 获取是否展开已选中的节点
+     */
+    public function getExpandSelected(): bool
+    {
+        return $this->evaluate($this->expandSelected);
+    }
+
+    /**
+     * 获取默认展开层级
+     */
+    public function getDefaultOpenLevel(): ?int
+    {
+        return $this->evaluate($this->defaultOpenLevel);
+    }
+
+    /**
+     * 设置最大高度
+     *
+     * @param  string|int  $height  高度值，如 '400px', '50vh', '20rem' 或整数 (将自动添加 px)
+     */
+    public function maxHeight(string | int | Closure | null $height): static
+    {
+        $this->maxHeight = $height;
+
+        return $this;
+    }
+
+    /**
+     * 获取最大高度 (带单位的字符串)
+     */
+    public function getMaxHeight(): ?string
+    {
+        $height = $this->evaluate($this->maxHeight);
+
+        if ($height === null) {
+            return null;
+        }
+
+        // 如果是整数，添加 px 单位
+        if (is_int($height)) {
+            return $height . 'px';
+        }
+
+        return $height;
     }
 
     /**

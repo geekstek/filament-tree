@@ -20,6 +20,8 @@ The package will auto-register via Laravel's package discovery.
 
 ### 1. Tree (Cascading Tree Selector)
 
+![tree](docs/images/tree.png "Tree")
+
 A flat tree component with checkbox selection and cascade behavior - when you select a parent, all children are automatically selected.
 
 ```php
@@ -57,13 +59,37 @@ Tree::make('permissions')
 | Method | Description |
 |--------|-------------|
 | `options(array\|Closure $options)` | Set the tree data structure |
-| `disabledOptions(array\|Closure $ids)` | Disable specific node IDs |
+| `disabledOptions(array\|Closure $ids)` | Disable specific node IDs (they won't be selected when parent is clicked) |
 | `showToolbar(bool\|Closure $show)` | Show/hide the expand/collapse toolbar |
 | `hideToolbar()` | Hide the toolbar |
 | `defaultExpanded(bool\|Closure $expanded)` | Set default expanded state |
 | `collapsed()` | Start with all nodes collapsed |
+| `expandSelected(bool\|Closure $expand)` | Expand nodes that contain selected items |
+| `defaultOpenLevel(int\|Closure $level)` | Set default expand level (0 = all collapsed, 1 = first level, etc.) |
+| `maxHeight(string\|int\|Closure $height)` | Set max height of the tree container (e.g., `'400px'`, `'50vh'`, `300`) |
+
+#### Height Control Example
+
+```php
+// Limit tree height to show approximately 10 rows
+Tree::make('permissions')
+    ->options($options)
+    ->maxHeight('360px') // ~36px per row × 10 rows
+
+// Use viewport height
+Tree::make('permissions')
+    ->options($options)
+    ->maxHeight('50vh')
+
+// Using integer (will be converted to pixels)
+Tree::make('permissions')
+    ->options($options)
+    ->maxHeight(400)
+```
 
 ### 2. TreeSelect (Dropdown Tree)
+
+![tree select](docs/images/tree_select.png "Tree Select")
 
 A dropdown component with tree structure support, powered by TreeselectJS.
 
@@ -98,11 +124,31 @@ TreeSelect::make('category_id')
 
 | Method | Description |
 |--------|-------------|
-| `options(array\|Closure $options)` | Set the tree data (uses `value` and `name` keys) |
+| `options(array\|Closure $options)` | Set the tree data (supports both `id`/`label` and `value`/`name` formats) |
+| `disabledOptions(array\|Closure $ids)` | Disable specific node IDs |
 | `single(bool\|Closure $isSingle)` | Enable single select mode |
 | `showTags(bool\|Closure $show)` | Show selected items as tags |
 | `clearable(bool\|Closure $clearable)` | Allow clearing selection |
 | `searchable(bool\|Closure $searchable)` | Enable search functionality |
+| `placeholder(string\|Closure $placeholder)` | Set placeholder text |
+| `expandSelected(bool\|Closure $expand)` | Expand nodes that contain selected items |
+| `defaultOpenLevel(int\|Closure $level)` | Set default expand level (0 = all collapsed, 1 = first level, etc.) |
+| `maxHeight(string\|int\|Closure $height)` | Set max height of the dropdown list (e.g., `'300px'`, `'50vh'`, `250`) |
+
+#### Height Control Example
+
+```php
+// Limit dropdown height
+TreeSelect::make('category_id')
+    ->options($options)
+    ->maxHeight('250px')
+
+// For large datasets
+TreeSelect::make('category_id')
+    ->options($largeDataset)
+    ->maxHeight('400px')
+    ->searchable() // Enable search for easier navigation
+```
 
 ### 3. TreeEntry (Infolist Display)
 
@@ -133,6 +179,7 @@ TreeEntry::make('permissions')
 | `options(array\|Closure $options)` | Set the tree data structure |
 | `defaultExpanded(bool\|Closure $expanded)` | Set default expanded state |
 | `collapsed()` | Start with all nodes collapsed |
+| `maxHeight(string\|int\|Closure $height)` | Set max height of the tree display (e.g., `'400px'`, `'50vh'`, `300`) |
 
 ## Data Structure
 

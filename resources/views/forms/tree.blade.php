@@ -49,7 +49,7 @@
         html.dark .fi-fo-tree-toolbar-separator,
         .dark .fi-fo-tree-toolbar-separator { color: #3f3f46; }
 
-        .fi-fo-tree-content { padding: 0.5rem; max-height: 400px; overflow-y: auto; }
+        .fi-fo-tree-content { padding: 0.5rem; overflow-y: auto; }
 
         .fi-fo-tree-empty {
             padding: 1.5rem;
@@ -164,6 +164,8 @@
             state: $wire.$entangle('{{ $getStatePath() }}'),
             isGlobalDisabled: {{ $isDisabled() ? 'true' : 'false' }},
             defaultExpanded: {{ $getDefaultExpanded() ? 'true' : 'false' }},
+            expandSelected: {{ $getExpandSelected() ? 'true' : 'false' }},
+            defaultOpenLevel: {{ $getDefaultOpenLevel() ?? 'null' }},
 
             toggleNode(id, selectableDescendants, allDescendants, isNodeDisabled) {
                 if (this.isGlobalDisabled || isNodeDisabled) return;
@@ -225,20 +227,25 @@
             selectAll(nodes) {
                 if (this.isGlobalDisabled) return;
 
-                const getAllIds = (items) => {
+                const getAllIds = (items, parentDisabled = false) => {
                     let ids = [];
                     items.forEach(item => {
-                        if (!item._disabled) {
+                        // 如果当前节点被禁用或父节点被禁用，则跳过
+                        const isDisabled = item._disabled || parentDisabled;
+
+                        if (!isDisabled) {
                             ids.push(item.id);
                         }
+
+                        // 递归处理子节点，传递当前禁用状态
                         if (item.children && item.children.length) {
-                            ids = ids.concat(getAllIds(item.children));
+                            ids = ids.concat(getAllIds(item.children, isDisabled));
                         }
                     });
                     return ids;
                 };
 
-                const allIds = getAllIds(nodes);
+                const allIds = getAllIds(nodes, false);
                 this.state = allIds;
             },
 
@@ -289,7 +296,7 @@
             </div>
         @endif
 
-        <div class="fi-fo-tree-content">
+        <div class="fi-fo-tree-content" @if($getMaxHeight()) style="max-height: {{ $getMaxHeight() }}" @endif>
             @if(empty($getTreeData()))
                 <p class="fi-fo-tree-empty">
                     {{ __('geekstek-filament-tree::filament-tree.empty.no_data') }}
@@ -300,7 +307,10 @@
                         @include('geekstek-filament-tree::forms.tree-item', [
                             'node' => $node,
                             'defaultExpanded' => $getDefaultExpanded(),
+                            'expandSelected' => $getExpandSelected(),
+                            'defaultOpenLevel' => $getDefaultOpenLevel(),
                             'level' => 0,
+                            'parentDisabled' => false,
                         ])
                     @endforeach
                 </div>

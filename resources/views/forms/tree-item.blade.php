@@ -1,19 +1,47 @@
 @props([
     'node',
     'defaultExpanded' => true,
+    'expandSelected' => false,
+    'defaultOpenLevel' => null,
     'level' => 0,
+    'parentDisabled' => false,
 ])
 
 @php
     $hasChildren = !empty($node['children']);
-    $isDisabled = $node['_disabled'] ?? false;
+    // 如果父节点被禁用，子节点也应该被禁用
+    $isDisabled = ($node['_disabled'] ?? false) || $parentDisabled;
     $indentPx = $level * 28;
     $selectableDescendants = $node['_selectableDescendants'] ?? [];
     $allDescendants = $node['_descendants'] ?? [];
+
+    // 计算初始展开状态
+    // 优先级: defaultOpenLevel > expandSelected > defaultExpanded
+    $initialOpen = $defaultExpanded;
+
+    // 如果设置了 defaultOpenLevel，按层级展开
+    if ($defaultOpenLevel !== null) {
+        $initialOpen = $level < $defaultOpenLevel;
+    }
 @endphp
 
 <div
-    x-data="{ open: {{ $defaultExpanded ? 'true' : 'false' }} }"
+    x-data="{
+        open: {{ $initialOpen ? 'true' : 'false' }},
+        expandSelected: {{ $expandSelected ? 'true' : 'false' }},
+        allDescendants: @js($allDescendants),
+
+        init() {
+            // 如果启用了 expandSelected，检查是否有子节点被选中
+            if (this.expandSelected && this.allDescendants.length > 0) {
+                const currentState = $wire.get('{{ $getStatePath() }}') ?? [];
+                const hasSelectedDescendant = this.allDescendants.some(id => currentState.includes(id));
+                if (hasSelectedDescendant) {
+                    this.open = true;
+                }
+            }
+        }
+    }"
     x-on:tree-expand-event.window="open = $event.detail.expand"
     class="fi-fo-tree-node"
 >
@@ -89,7 +117,10 @@
                 @include('geekstek-filament-tree::forms.tree-item', [
                     'node' => $child,
                     'defaultExpanded' => $defaultExpanded,
+                    'expandSelected' => $expandSelected,
+                    'defaultOpenLevel' => $defaultOpenLevel,
                     'level' => $level + 1,
+                    'parentDisabled' => $isDisabled,
                 ])
             @endforeach
         </div>

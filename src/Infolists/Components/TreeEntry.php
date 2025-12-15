@@ -20,6 +20,11 @@ class TreeEntry extends Entry
     protected bool | Closure $defaultExpanded = true;
 
     /**
+     * 最大高度 (支持 px, vh, rem 等单位)
+     */
+    protected string | int | Closure | null $maxHeight = '400px';
+
+    /**
      * 设置树形选项数据
      */
     public function options(array | Closure $options): static
@@ -63,5 +68,36 @@ class TreeEntry extends Entry
     public function getDefaultExpanded(): bool
     {
         return $this->evaluate($this->defaultExpanded);
+    }
+
+    /**
+     * 设置最大高度
+     *
+     * @param  string|int  $height  高度值，如 '400px', '50vh', '20rem' 或整数 (将自动添加 px)
+     */
+    public function maxHeight(string | int | Closure | null $height): static
+    {
+        $this->maxHeight = $height;
+
+        return $this;
+    }
+
+    /**
+     * 获取最大高度 (带单位的字符串)
+     */
+    public function getMaxHeight(): ?string
+    {
+        $height = $this->evaluate($this->maxHeight);
+
+        if ($height === null) {
+            return null;
+        }
+
+        // 如果是整数，添加 px 单位
+        if (is_int($height)) {
+            return $height . 'px';
+        }
+
+        return $height;
     }
 }

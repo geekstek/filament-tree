@@ -7,6 +7,7 @@
 
     @php
         $componentId = 'treeselect-' . Str::random(8);
+        $maxHeight = $getMaxHeight();
         $config = [
             'statePath' => $getStatePath(),
             'options' => $getOptions(),
@@ -18,6 +19,9 @@
             'searchable' => $isSearchable(),
             'tagsCountText' => __('geekstek-filament-tree::filament-tree.status.items_selected'),
             'emptyText' => __('geekstek-filament-tree::filament-tree.empty.no_results'),
+            'expandSelected' => $getExpandSelected(),
+            'openLevel' => $getDefaultOpenLevel(),
+            'maxHeight' => $maxHeight,
         ];
     @endphp
 
@@ -59,6 +63,8 @@
                         searchable: this.config.searchable,
                         tagsCountText: this.config.tagsCountText,
                         emptyText: this.config.emptyText,
+                        expandSelected: this.config.expandSelected,
+                        openLevel: this.config.openLevel,
                     });
 
                     this.tree.srcElement.addEventListener('input', (e) => {
@@ -123,6 +129,7 @@
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             background-color: rgb(255 255 255);
             margin-top: 0.25rem;
+            @if($maxHeight) max-height: {{ $maxHeight }}; overflow-y: auto; @endif
         }
 
         .fi-fo-tree-select .treeselect-container .treeselect-list__item {
