@@ -1,0 +1,10 @@
+/vendor
+/node_modules
+/public
+/storage
+/.idea
+/.vscode
+.DS_Store
+*.log
+.phpunit.result.cache
+.env
