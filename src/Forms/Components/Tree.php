@@ -128,11 +128,28 @@ class Tree extends Field
             $children = $node['children'] ?? [];
             $processedChildren = $this->processNodes($children, $disabledIds);
 
-            // 收集所有后代 ID (用于级联全选)
-            $childIds = array_column($children, 'id');
+            // 收集所有后代 ID (用于判断选中状态)
+            $allDescendantIds = [];
+            // 收集可选择的后代 ID (用于级联选中，排除禁用项)
+            $selectableDescendantIds = [];
+
+            foreach ($children as $child) {
+                $childId = $child['id'];
+                $allDescendantIds[] = $childId;
+
+                // 只有非禁用的才加入可选择列表
+                if (! in_array($childId, $disabledIds)) {
+                    $selectableDescendantIds[] = $childId;
+                }
+            }
+
+            // 递归收集子节点的后代
             foreach ($processedChildren as $child) {
                 if (! empty($child['_descendants'])) {
-                    $childIds = array_merge($childIds, $child['_descendants']);
+                    $allDescendantIds = array_merge($allDescendantIds, $child['_descendants']);
+                }
+                if (! empty($child['_selectableDescendants'])) {
+                    $selectableDescendantIds = array_merge($selectableDescendantIds, $child['_selectableDescendants']);
                 }
             }
 
@@ -140,7 +157,8 @@ class Tree extends Field
             $isNodeDisabled = in_array($node['id'], $disabledIds);
 
             $node['children'] = $processedChildren;
-            $node['_descendants'] = $childIds;
+            $node['_descendants'] = $allDescendantIds;
+            $node['_selectableDescendants'] = $selectableDescendantIds;
             $node['_disabled'] = $isNodeDisabled;
 
             $result[] = $node;

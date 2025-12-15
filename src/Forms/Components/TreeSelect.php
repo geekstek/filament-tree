@@ -15,6 +15,11 @@ class TreeSelect extends Field
     protected array | Closure $options = [];
 
     /**
+     * 存储哪些节点 ID 是禁用的（不可选）
+     */
+    protected array | Closure $disabledOptions = [];
+
+    /**
      * 是否单选模式
      */
     protected bool | Closure $isSingleSelect = false;
@@ -35,6 +40,11 @@ class TreeSelect extends Field
     protected bool | Closure $isSearchable = true;
 
     /**
+     * 占位符文本
+     */
+    protected string | Closure | null $customPlaceholder = null;
+
+    /**
      * 设置树形选项数据
      */
     public function options(array | Closure $options): static
@@ -45,11 +55,44 @@ class TreeSelect extends Field
     }
 
     /**
-     * 获取树形选项数据
+     * 获取树形选项数据（转换为 TreeselectJS 格式）
      */
     public function getOptions(): array
     {
-        return $this->evaluate($this->options);
+        $options = $this->evaluate($this->options);
+        $disabledIds = $this->getDisabledOptions();
+
+        return $this->transformOptions($options, $disabledIds);
+    }
+
+    /**
+     * 转换选项格式为 TreeselectJS 所需格式
+     * 从 id/label 转换为 value/name
+     */
+    protected function transformOptions(array $options, array $disabledIds): array
+    {
+        $result = [];
+
+        foreach ($options as $option) {
+            $transformed = [
+                'value' => $option['id'] ?? $option['value'],
+                'name' => $option['label'] ?? $option['name'] ?? '',
+            ];
+
+            // 检查是否禁用
+            if (in_array($transformed['value'], $disabledIds)) {
+                $transformed['disabled'] = true;
+            }
+
+            // 递归处理子节点
+            if (! empty($option['children'])) {
+                $transformed['children'] = $this->transformOptions($option['children'], $disabledIds);
+            }
+
+            $result[] = $transformed;
+        }
+
+        return $result;
     }
 
     /**
@@ -122,5 +165,41 @@ class TreeSelect extends Field
     public function isSearchable(): bool
     {
         return $this->evaluate($this->isSearchable);
+    }
+
+    /**
+     * 设置禁用的选项 ID 列表
+     */
+    public function disabledOptions(array | Closure $options): static
+    {
+        $this->disabledOptions = $options;
+
+        return $this;
+    }
+
+    /**
+     * 获取禁用的选项 ID 列表
+     */
+    public function getDisabledOptions(): array
+    {
+        return $this->evaluate($this->disabledOptions) ?? [];
+    }
+
+    /**
+     * 设置占位符文本
+     */
+    public function placeholder(string | Closure | null $placeholder): static
+    {
+        $this->customPlaceholder = $placeholder;
+
+        return $this;
+    }
+
+    /**
+     * 获取占位符文本
+     */
+    public function getPlaceholder(): ?string
+    {
+        return $this->evaluate($this->customPlaceholder);
     }
 }

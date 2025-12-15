@@ -13,6 +13,7 @@ class FilamentTreeServiceProvider extends PackageServiceProvider
     {
         $package
             ->name(static::$name)
-            ->hasViews(static::$name);
+            ->hasViews(static::$name)
+            ->hasTranslations();
     }
 }

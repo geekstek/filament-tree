@@ -1,82 +1,97 @@
 @props([
     'node',
     'defaultExpanded' => true,
+    'level' => 0,
 ])
 
-<li
+@php
+    $hasChildren = !empty($node['children']);
+    $isDisabled = $node['_disabled'] ?? false;
+    $indentPx = $level * 28;
+    $selectableDescendants = $node['_selectableDescendants'] ?? [];
+    $allDescendants = $node['_descendants'] ?? [];
+@endphp
+
+<div
     x-data="{ open: {{ $defaultExpanded ? 'true' : 'false' }} }"
     x-on:tree-expand-event.window="open = $event.detail.expand"
-    class="relative"
+    class="fi-fo-tree-node"
 >
     <div
-        class="flex items-center gap-1.5 py-1.5 px-2 rounded-md transition duration-150 hover:bg-gray-50 dark:hover:bg-white/5"
-        :class="{ 'bg-primary-50 dark:bg-primary-500/10': isChecked({{ $node['id'] }}) }"
+        class="fi-fo-tree-node-row"
+        :class="{
+            'fi-fo-tree-node-checked': isChecked({{ $node['id'] }}, @js($selectableDescendants))
+        }"
+        style="padding-left: {{ $indentPx + 8 }}px"
     >
         {{-- 展开/收起按钮 --}}
-        <div class="w-5 flex justify-center shrink-0">
-            @if(!empty($node['children']))
-                <button
-                    type="button"
-                    @click="open = !open"
-                    class="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-0.5"
-                >
-                    <svg
-                        x-show="!open"
-                        class="w-3 h-3"
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                    >
-                        <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+        <div class="fi-fo-tree-node-toggle">
+            @if($hasChildren)
+                <button type="button" @click.stop="open = !open" class="fi-fo-tree-node-toggle-btn">
+                    <svg x-show="!open" class="fi-fo-tree-node-toggle-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                     </svg>
-                    <svg
-                        x-show="open"
-                        class="w-3 h-3"
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                    >
-                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                    <svg x-show="open" x-cloak class="fi-fo-tree-node-toggle-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                     </svg>
                 </button>
             @endif
         </div>
 
         {{-- 复选框 --}}
-        <label class="flex items-center gap-2 cursor-pointer flex-1 select-none">
-            <input
-                type="checkbox"
-                :checked="isChecked({{ $node['id'] }})"
-                :disabled="isGlobalDisabled || {{ $node['_disabled'] ? 'true' : 'false' }}"
-                {{-- 核心点击事件 --}}
-                @change="toggleNode({{ $node['id'] }}, @js($node['_descendants']), {{ $node['_disabled'] ? 'true' : 'false' }})"
-                class="fi-checkbox-input rounded border-gray-300 dark:border-white/20 text-primary-600 dark:text-primary-500 shadow-sm focus:ring-primary-500 dark:focus:ring-primary-400 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-white/5 dark:checked:bg-primary-500"
-            >
-            <span
-                class="text-sm text-gray-700 dark:text-gray-200"
-                :class="{
-                    'text-gray-400 dark:text-gray-500': {{ $node['_disabled'] ? 'true' : 'false' }},
-                    'font-medium': isChecked({{ $node['id'] }})
-                }"
-            >
-                {{ $node['label'] }}
-            </span>
+        <input
+            type="checkbox"
+            :checked="isChecked({{ $node['id'] }}, @js($selectableDescendants))"
+            :indeterminate="isIndeterminate({{ $node['id'] }}, @js($selectableDescendants))"
+            :disabled="isGlobalDisabled || {{ $isDisabled ? 'true' : 'false' }}"
+            @change="toggleNode({{ $node['id'] }}, @js($selectableDescendants), @js($allDescendants), {{ $isDisabled ? 'true' : 'false' }})"
+            class="fi-checkbox-input fi-fo-tree-checkbox"
+        >
+
+        {{-- 图标 --}}
+        <div class="fi-fo-tree-node-icon">
+            @if($hasChildren)
+                <svg x-show="open" class="fi-fo-tree-folder-icon fi-fo-tree-folder-open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2 6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Z" />
+                </svg>
+                <svg x-show="!open" x-cloak class="fi-fo-tree-folder-icon fi-fo-tree-folder-closed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
+                </svg>
+            @else
+                <svg class="fi-fo-tree-file-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M3 3.5A1.5 1.5 0 0 1 4.5 2h6.879a1.5 1.5 0 0 1 1.06.44l4.122 4.12A1.5 1.5 0 0 1 17 7.622V16.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 16.5v-13Z" />
+                </svg>
+            @endif
+        </div>
+
+        {{-- 标签 --}}
+        <label
+            class="fi-fo-tree-node-label {{ $isDisabled ? 'fi-fo-tree-node-disabled' : '' }}"
+            :class="{ 'fi-fo-tree-node-label-checked': isChecked({{ $node['id'] }}, @js($selectableDescendants)) }"
+            @if(!$isDisabled) @click="toggleNode({{ $node['id'] }}, @js($selectableDescendants), @js($allDescendants), false)" @endif
+        >
+            {{ $node['label'] }}
+            @if($isDisabled)
+                <span class="fi-fo-tree-node-disabled-text">({{ __('geekstek-filament-tree::filament-tree.status.disabled') }})</span>
+            @endif
         </label>
+
+        {{-- 子节点数量 --}}
+        @if($hasChildren)
+            <span class="fi-fo-tree-node-count">({{ count($node['children']) }})</span>
+        @endif
     </div>
 
-    @if(!empty($node['children']))
-        <ul
-            x-show="open"
-            x-collapse
-            class="pl-6 ml-2.5 border-l border-dashed border-gray-200 dark:border-white/10 space-y-0.5"
-        >
+    {{-- 子节点 --}}
+    @if($hasChildren)
+        <div x-show="open" x-collapse x-cloak class="fi-fo-tree-children">
             @foreach($node['children'] as $child)
                 @include('geekstek-filament-tree::forms.tree-item', [
                     'node' => $child,
                     'defaultExpanded' => $defaultExpanded,
+                    'level' => $level + 1,
                 ])
             @endforeach
-        </ul>
+        </div>
     @endif
-</li>
-
+</div>
