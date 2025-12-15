@@ -48,7 +48,7 @@
     <div
         class="fi-fo-tree-node-row"
         :class="{
-            'fi-fo-tree-node-checked': isChecked({{ $node['id'] }}, @js($selectableDescendants))
+            'fi-fo-tree-node-checked': isChecked(@js($node['id']), @js($selectableDescendants))
         }"
         style="padding-left: {{ $indentPx + 8 }}px"
     >
@@ -69,10 +69,10 @@
         {{-- 复选框 --}}
         <input
             type="checkbox"
-            :checked="isChecked({{ $node['id'] }}, @js($selectableDescendants))"
-            :indeterminate="isIndeterminate({{ $node['id'] }}, @js($selectableDescendants))"
+            :checked="isChecked(@js($node['id']), @js($selectableDescendants))"
+            :indeterminate="isIndeterminate(@js($node['id']), @js($selectableDescendants))"
             :disabled="isGlobalDisabled || {{ $isDisabled ? 'true' : 'false' }}"
-            @change="toggleNode({{ $node['id'] }}, @js($selectableDescendants), @js($allDescendants), {{ $isDisabled ? 'true' : 'false' }})"
+            @change="toggleNode(@js($node['id']), @js($selectableDescendants), @js($allDescendants), {{ $isDisabled ? 'true' : 'false' }})"
             class="fi-checkbox-input fi-fo-tree-checkbox"
         >
 
@@ -95,8 +95,8 @@
         {{-- 标签 --}}
         <label
             class="fi-fo-tree-node-label {{ $isDisabled ? 'fi-fo-tree-node-disabled' : '' }}"
-            :class="{ 'fi-fo-tree-node-label-checked': isChecked({{ $node['id'] }}, @js($selectableDescendants)) }"
-            @if(!$isDisabled) @click="toggleNode({{ $node['id'] }}, @js($selectableDescendants), @js($allDescendants), false)" @endif
+            :class="{ 'fi-fo-tree-node-label-checked': isChecked(@js($node['id']), @js($selectableDescendants)) }"
+            @if(!$isDisabled) @click="toggleNode(@js($node['id']), @js($selectableDescendants), @js($allDescendants), false)" @endif
         >
             {{ $node['label'] }}
             @if($isDisabled)
