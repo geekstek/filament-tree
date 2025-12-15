@@ -264,6 +264,7 @@
     <div
         x-data="{
             state: @js($initialState),
+            stateSet: new Set(@js($initialState).map(v => String(v))),
             search: '',
             isGlobalDisabled: {{ $isDisabled() ? 'true' : 'false' }},
             defaultExpanded: {{ $getDefaultExpanded() ? 'true' : 'false' }},
@@ -273,8 +274,9 @@
             isSearchable: {{ $isSearchable ? 'true' : 'false' }},
 
             init() {
-                // 监听 state 变化并同步到 Livewire
+                // 监听 state 变化并同步到 Livewire，同时更新 stateSet
                 this.$watch('state', (value) => {
+                    this.stateSet = new Set((value || []).map(v => String(v)));
                     $wire.set('{{ $statePath }}', value);
                 });
 
@@ -335,22 +337,21 @@
                 const checkIds = this.leafOnly ? selectableLeafDescendants : selectableDescendants;
 
                 if (hasSelectableDescendants) {
-                    // 父节点：根据可选择子节点的选中状态来决定
-                    const allSelectableSelected = checkIds.every(d => this.state.includes(d));
+                    // 父节点：使用 Set.has() 检查 O(1)
+                    const allSelectableSelected = checkIds.every(d => this.stateSet.has(String(d)));
                     shouldSelect = !allSelectableSelected;
                 } else if (allDescendants.length > 0) {
                     // 有子节点但都是禁用的，不允许操作
                     return;
                 } else {
-                    // 叶子节点：切换自身状态
-                    shouldSelect = !this.state.includes(id);
+                    // 叶子节点：使用 Set.has() 检查 O(1)
+                    shouldSelect = !this.stateSet.has(String(id));
                 }
 
                 if (shouldSelect) {
                     // 选中：leafOnly 模式只添加叶子节点，否则添加自身和所有可选择的子节点
                     let idsToAdd;
                     if (this.leafOnly) {
-                        // 如果是叶子节点（没有子节点），添加自身；否则只添加可选择的叶子后代
                         idsToAdd = selectableLeafDescendants.length > 0 ? selectableLeafDescendants : [id];
                     } else {
                         idsToAdd = [id, ...selectableDescendants];
@@ -358,43 +359,42 @@
                     const newState = new Set([...this.state, ...idsToAdd]);
                     this.state = Array.from(newState);
                 } else {
-                    // 取消选中：leafOnly 模式只移除叶子节点，否则移除自身和所有可选择的子节点
+                    // 取消选中：使用 Set 优化过滤 O(1) 查找
                     let idsToRemove;
                     if (this.leafOnly) {
                         idsToRemove = selectableLeafDescendants.length > 0 ? selectableLeafDescendants : [id];
                     } else {
                         idsToRemove = [id, ...selectableDescendants];
                     }
-                    this.state = this.state.filter(val => !idsToRemove.includes(val));
+                    const removeSet = new Set(idsToRemove.map(v => String(v)));
+                    this.state = this.state.filter(val => !removeSet.has(String(val)));
                 }
             },
 
             isChecked(id, selectableDescendants = [], selectableLeafDescendants = []) {
-                if (!Array.isArray(this.state)) return false;
-
-                // 转换为字符串进行比较（解决类型不匹配问题）
-                const stateStrings = this.state.map(v => String(v));
-                const idString = String(id);
-
                 // leafOnly 模式下使用叶子节点判断
                 const checkIds = this.leafOnly ? selectableLeafDescendants : selectableDescendants;
 
                 // 如果有可选择的子节点，只有当所有可选择子节点都被选中时才返回 true
                 if (checkIds.length > 0) {
-                    return checkIds.every(d => stateStrings.includes(String(d)));
+                    return checkIds.every(d => this.stateSet.has(String(d)));
                 }
 
-                // 叶子节点：检查自身是否在 state 中
-                return stateStrings.includes(idString);
+                // 叶子节点：使用 Set.has() 检查 O(1)
+                return this.stateSet.has(String(id));
             },
 
             isIndeterminate(id, selectableDescendants, selectableLeafDescendants = []) {
                 // leafOnly 模式下使用叶子节点判断
                 const checkIds = this.leafOnly ? selectableLeafDescendants : selectableDescendants;
 
-                if (!Array.isArray(this.state) || checkIds.length === 0) return false;
+                if (checkIds.length === 0) return false;
 
-                const checkedCount = checkIds.filter(d => this.state.includes(d)).length;
+                // 使用 Set.has() 优化计数 O(1) 查找
+                let checkedCount = 0;
+                for (const d of checkIds) {
+                    if (this.stateSet.has(String(d))) checkedCount++;
+                }
                 // 部分选中：有选中但不是全部可选择的
                 return checkedCount > 0 && checkedCount < checkIds.length;
             },
