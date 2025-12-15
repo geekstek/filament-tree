@@ -1,10 +1,12 @@
 @props([
     'node',
+    'statePath',
     'defaultExpanded' => true,
     'expandSelected' => false,
     'defaultOpenLevel' => null,
     'level' => 0,
     'parentDisabled' => false,
+    'isSearchable' => false,
 ])
 
 @php
@@ -31,19 +33,28 @@
         open: {{ $initialOpen ? 'true' : 'false' }},
         expandSelected: {{ $expandSelected ? 'true' : 'false' }},
         allDescendants: @js($allDescendants),
+        nodeData: @js($node),
 
         init() {
             // 如果启用了 expandSelected，检查是否有子节点被选中
             if (this.expandSelected && this.allDescendants.length > 0) {
-                const currentState = $wire.get('{{ $getStatePath() }}') ?? [];
+                const currentState = $wire.get('{{ $statePath }}') ?? [];
                 const hasSelectedDescendant = this.allDescendants.some(id => currentState.includes(id));
                 if (hasSelectedDescendant) {
                     this.open = true;
                 }
             }
+        },
+
+        isVisible() {
+            // 如果没有搜索功能或没有搜索内容，始终显示
+            if (!this.isSearchable || !search || search.length === 0) return true;
+            // 使用父级的 nodeOrChildrenMatchSearch 方法
+            return nodeOrChildrenMatchSearch(this.nodeData);
         }
     }"
     x-on:tree-expand-event.window="open = $event.detail.expand"
+    x-show="{{ $isSearchable ? 'isVisible()' : 'true' }}"
     class="fi-fo-tree-node"
 >
     <div
@@ -57,12 +68,8 @@
         <div class="fi-fo-tree-node-toggle">
             @if($hasChildren)
                 <button type="button" @click.stop="open = !open" class="fi-fo-tree-node-toggle-btn">
-                    <svg x-show="!open" class="fi-fo-tree-node-toggle-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
-                    </svg>
-                    <svg x-show="open" x-cloak class="fi-fo-tree-node-toggle-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
-                    </svg>
+                    <svg x-show="!open" class="fi-fo-tree-node-toggle-icon"><use href="#fi-tree-chevron-right"></use></svg>
+                    <svg x-show="open" x-cloak class="fi-fo-tree-node-toggle-icon"><use href="#fi-tree-chevron-down"></use></svg>
                 </button>
             @endif
         </div>
@@ -80,16 +87,10 @@
         {{-- 图标 --}}
         <div class="fi-fo-tree-node-icon">
             @if($hasChildren)
-                <svg x-show="open" class="fi-fo-tree-folder-icon fi-fo-tree-folder-open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M2 6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Z" />
-                </svg>
-                <svg x-show="!open" x-cloak class="fi-fo-tree-folder-icon fi-fo-tree-folder-closed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
-                </svg>
+                <svg x-show="open" class="fi-fo-tree-folder-icon fi-fo-tree-folder-open"><use href="#fi-tree-folder-open"></use></svg>
+                <svg x-show="!open" x-cloak class="fi-fo-tree-folder-icon fi-fo-tree-folder-closed"><use href="#fi-tree-folder-closed"></use></svg>
             @else
-                <svg class="fi-fo-tree-file-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M3 3.5A1.5 1.5 0 0 1 4.5 2h6.879a1.5 1.5 0 0 1 1.06.44l4.122 4.12A1.5 1.5 0 0 1 17 7.622V16.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 16.5v-13Z" />
-                </svg>
+                <svg class="fi-fo-tree-file-icon"><use href="#fi-tree-file"></use></svg>
             @endif
         </div>
 
@@ -117,11 +118,13 @@
             @foreach($node['children'] as $child)
                 @include('geekstek-filament-tree::forms.tree-item', [
                     'node' => $child,
+                    'statePath' => $statePath,
                     'defaultExpanded' => $defaultExpanded,
                     'expandSelected' => $expandSelected,
                     'defaultOpenLevel' => $defaultOpenLevel,
                     'level' => $level + 1,
                     'parentDisabled' => $isDisabled,
+                    'isSearchable' => $isSearchable,
                 ])
             @endforeach
         </div>

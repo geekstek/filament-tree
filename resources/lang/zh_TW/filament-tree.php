@@ -13,6 +13,11 @@ return [
         'search' => '搜尋...',
     ],
 
+    'search' => [
+        'placeholder' => '搜尋...',
+        'no_results' => '未找到符合的結果',
+    ],
+
     'empty' => [
         'no_data' => '暫無資料',
         'no_results' => '未找到結果',

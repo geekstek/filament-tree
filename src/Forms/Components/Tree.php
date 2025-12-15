@@ -4,6 +4,7 @@ namespace Geekstek\FilamentTree\Forms\Components;
 
 use Closure;
 use Filament\Forms\Components\Field;
+use Illuminate\Contracts\Support\Htmlable;
 
 class Tree extends Field
 {
@@ -48,6 +49,26 @@ class Tree extends Field
      * 是否只保存叶子节点的值
      */
     protected bool | Closure $leafOnly = false;
+
+    /**
+     * 是否可搜索
+     */
+    protected bool | Closure $isSearchable = false;
+
+    /**
+     * 搜索框占位符
+     */
+    protected string | Htmlable | Closure | null $searchPrompt = null;
+
+    /**
+     * 无搜索结果消息
+     */
+    protected string | Htmlable | Closure | null $noSearchResultsMessage = null;
+
+    /**
+     * 搜索防抖延迟 (毫秒)
+     */
+    protected int | Closure $searchDebounce = 300;
 
     /**
      * 设置树形选项数据
@@ -223,6 +244,78 @@ class Tree extends Field
         }
 
         return $height;
+    }
+
+    /**
+     * 设置是否可搜索
+     */
+    public function searchable(bool | Closure $condition = true): static
+    {
+        $this->isSearchable = $condition;
+
+        return $this;
+    }
+
+    /**
+     * 获取是否可搜索
+     */
+    public function isSearchable(): bool
+    {
+        return (bool) $this->evaluate($this->isSearchable);
+    }
+
+    /**
+     * 设置搜索框占位符
+     */
+    public function searchPrompt(string | Htmlable | Closure | null $prompt): static
+    {
+        $this->searchPrompt = $prompt;
+
+        return $this;
+    }
+
+    /**
+     * 获取搜索框占位符
+     */
+    public function getSearchPrompt(): string | Htmlable
+    {
+        return $this->evaluate($this->searchPrompt) ?? __('geekstek-filament-tree::filament-tree.search.placeholder');
+    }
+
+    /**
+     * 设置无搜索结果消息
+     */
+    public function noSearchResultsMessage(string | Htmlable | Closure | null $message): static
+    {
+        $this->noSearchResultsMessage = $message;
+
+        return $this;
+    }
+
+    /**
+     * 获取无搜索结果消息
+     */
+    public function getNoSearchResultsMessage(): string | Htmlable
+    {
+        return $this->evaluate($this->noSearchResultsMessage) ?? __('geekstek-filament-tree::filament-tree.search.no_results');
+    }
+
+    /**
+     * 设置搜索防抖延迟
+     */
+    public function searchDebounce(int | Closure $debounce): static
+    {
+        $this->searchDebounce = $debounce;
+
+        return $this;
+    }
+
+    /**
+     * 获取搜索防抖延迟
+     */
+    public function getSearchDebounce(): int
+    {
+        return (int) $this->evaluate($this->searchDebounce);
     }
 
     /**

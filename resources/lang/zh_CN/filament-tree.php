@@ -13,6 +13,11 @@ return [
         'search' => '搜索...',
     ],
 
+    'search' => [
+        'placeholder' => '搜索...',
+        'no_results' => '未找到匹配的结果',
+    ],
+
     'empty' => [
         'no_data' => '暂无数据',
         'no_results' => '未找到结果',

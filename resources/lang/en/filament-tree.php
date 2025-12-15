@@ -13,6 +13,11 @@ return [
         'search' => 'Search...',
     ],
 
+    'search' => [
+        'placeholder' => 'Search...',
+        'no_results' => 'No matching results found',
+    ],
+
     'empty' => [
         'no_data' => 'No data available',
         'no_results' => 'No results found',
