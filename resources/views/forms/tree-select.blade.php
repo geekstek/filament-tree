@@ -26,6 +26,7 @@
             'openLevel' => $getDefaultOpenLevel(),
             'maxHeight' => $maxHeight,
             'isLive' => $isLive(),
+            'leafOnly' => $isLeafOnly(),
         ];
     @endphp
 
@@ -39,11 +40,31 @@
                 tree: null,
                 initialized: false,
                 TreeselectClass: null,
+                leafNodeValues: new Set(),
 
                 async init() {
                     await this.$nextTick();
                     await this.loadTreeselectModule();
+                    this.collectLeafNodes(this.config.options);
                     await this.initTreeselect();
+                },
+
+                collectLeafNodes(options) {
+                    options.forEach(option => {
+                        if (!option.children || option.children.length === 0) {
+                            this.leafNodeValues.add(option.value);
+                        } else {
+                            this.collectLeafNodes(option.children);
+                        }
+                    });
+                },
+
+                filterLeafOnly(values) {
+                    if (!this.config.leafOnly) return values;
+                    if (this.config.isSingleSelect) {
+                        return this.leafNodeValues.has(values) ? values : null;
+                    }
+                    return values.filter(v => this.leafNodeValues.has(v));
                 },
 
                 async loadTreeselectModule() {
@@ -83,7 +104,8 @@
                         });
 
                         this.tree.srcElement.addEventListener('input', (e) => {
-                            $wire.set(this.config.statePath, e.detail);
+                            const filteredValue = this.filterLeafOnly(e.detail);
+                            $wire.set(this.config.statePath, filteredValue);
                         });
 
                         this.initialized = true;

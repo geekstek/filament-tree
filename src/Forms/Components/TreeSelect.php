@@ -60,6 +60,11 @@ class TreeSelect extends Field
     protected string | int | Closure | null $maxHeight = '300px';
 
     /**
+     * 是否只保存叶子节点的值
+     */
+    protected bool | Closure $leafOnly = false;
+
+    /**
      * 设置树形选项数据
      */
     public function options(array | Closure $options): static
@@ -285,5 +290,24 @@ class TreeSelect extends Field
         }
 
         return $height;
+    }
+
+    /**
+     * 设置是否只保存叶子节点的值
+     * 当启用时，选中父节点只会保存其下所有叶子节点的 ID
+     */
+    public function leafOnly(bool | Closure $leafOnly = true): static
+    {
+        $this->leafOnly = $leafOnly;
+
+        return $this;
+    }
+
+    /**
+     * 获取是否只保存叶子节点的值
+     */
+    public function isLeafOnly(): bool
+    {
+        return $this->evaluate($this->leafOnly);
     }
 }

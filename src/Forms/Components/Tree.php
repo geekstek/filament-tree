@@ -45,6 +45,11 @@ class Tree extends Field
     protected string | int | Closure | null $maxHeight = '400px';
 
     /**
+     * 是否只保存叶子节点的值
+     */
+    protected bool | Closure $leafOnly = false;
+
+    /**
      * 设置树形选项数据
      */
     public function options(array | Closure $options): static
@@ -171,6 +176,25 @@ class Tree extends Field
     }
 
     /**
+     * 设置是否只保存叶子节点的值
+     * 当启用时，选中父节点只会保存其下所有叶子节点的 ID
+     */
+    public function leafOnly(bool | Closure $leafOnly = true): static
+    {
+        $this->leafOnly = $leafOnly;
+
+        return $this;
+    }
+
+    /**
+     * 获取是否只保存叶子节点的值
+     */
+    public function isLeafOnly(): bool
+    {
+        return $this->evaluate($this->leafOnly);
+    }
+
+    /**
      * 设置最大高度
      *
      * @param  string|int  $height  高度值，如 '400px', '50vh', '20rem' 或整数 (将自动添加 px)
@@ -216,14 +240,22 @@ class Tree extends Field
             $allDescendantIds = [];
             // 收集可选择的后代 ID (用于级联选中，排除禁用项)
             $selectableDescendantIds = [];
+            // 收集可选择的叶子后代 ID (用于 leafOnly 模式)
+            $selectableLeafDescendantIds = [];
 
-            foreach ($children as $child) {
+            foreach ($children as $index => $child) {
                 $childId = $child['id'];
                 $allDescendantIds[] = $childId;
 
                 // 只有非禁用的才加入可选择列表
                 if (! in_array($childId, $disabledIds)) {
                     $selectableDescendantIds[] = $childId;
+
+                    // 如果子节点是叶子节点（没有children），加入叶子列表
+                    $childHasChildren = ! empty($processedChildren[$index]['children']);
+                    if (! $childHasChildren) {
+                        $selectableLeafDescendantIds[] = $childId;
+                    }
                 }
             }
 
@@ -235,6 +267,9 @@ class Tree extends Field
                 if (! empty($child['_selectableDescendants'])) {
                     $selectableDescendantIds = array_merge($selectableDescendantIds, $child['_selectableDescendants']);
                 }
+                if (! empty($child['_selectableLeafDescendants'])) {
+                    $selectableLeafDescendantIds = array_merge($selectableLeafDescendantIds, $child['_selectableLeafDescendants']);
+                }
             }
 
             // 判断当前节点是否被特定禁用
@@ -243,6 +278,7 @@ class Tree extends Field
             $node['children'] = $processedChildren;
             $node['_descendants'] = $allDescendantIds;
             $node['_selectableDescendants'] = $selectableDescendantIds;
+            $node['_selectableLeafDescendants'] = $selectableLeafDescendantIds;
             $node['_disabled'] = $isNodeDisabled;
 
             $result[] = $node;

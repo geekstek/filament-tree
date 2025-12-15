@@ -166,8 +166,9 @@
             defaultExpanded: {{ $getDefaultExpanded() ? 'true' : 'false' }},
             expandSelected: {{ $getExpandSelected() ? 'true' : 'false' }},
             defaultOpenLevel: {{ $getDefaultOpenLevel() ?? 'null' }},
+            leafOnly: {{ $isLeafOnly() ? 'true' : 'false' }},
 
-            toggleNode(id, selectableDescendants, allDescendants, isNodeDisabled) {
+            toggleNode(id, selectableDescendants, allDescendants, isNodeDisabled, selectableLeafDescendants) {
                 if (this.isGlobalDisabled || isNodeDisabled) return;
 
                 if (!Array.isArray(this.state)) this.state = [];
@@ -176,9 +177,12 @@
                 const hasSelectableDescendants = selectableDescendants.length > 0;
                 let shouldSelect;
 
+                // leafOnly 模式下使用叶子节点判断
+                const checkIds = this.leafOnly ? selectableLeafDescendants : selectableDescendants;
+
                 if (hasSelectableDescendants) {
                     // 父节点：根据可选择子节点的选中状态来决定
-                    const allSelectableSelected = selectableDescendants.every(d => this.state.includes(d));
+                    const allSelectableSelected = checkIds.every(d => this.state.includes(d));
                     shouldSelect = !allSelectableSelected;
                 } else if (allDescendants.length > 0) {
                     // 有子节点但都是禁用的，不允许操作
@@ -189,35 +193,52 @@
                 }
 
                 if (shouldSelect) {
-                    // 选中：添加自身和所有可选择的子节点（排除禁用项）
-                    const idsToAdd = [id, ...selectableDescendants];
+                    // 选中：leafOnly 模式只添加叶子节点，否则添加自身和所有可选择的子节点
+                    let idsToAdd;
+                    if (this.leafOnly) {
+                        // 如果是叶子节点（没有子节点），添加自身；否则只添加可选择的叶子后代
+                        idsToAdd = selectableLeafDescendants.length > 0 ? selectableLeafDescendants : [id];
+                    } else {
+                        idsToAdd = [id, ...selectableDescendants];
+                    }
                     const newState = new Set([...this.state, ...idsToAdd]);
                     this.state = Array.from(newState);
                 } else {
-                    // 取消选中：移除自身和所有可选择的子节点
-                    const idsToRemove = [id, ...selectableDescendants];
+                    // 取消选中：leafOnly 模式只移除叶子节点，否则移除自身和所有可选择的子节点
+                    let idsToRemove;
+                    if (this.leafOnly) {
+                        idsToRemove = selectableLeafDescendants.length > 0 ? selectableLeafDescendants : [id];
+                    } else {
+                        idsToRemove = [id, ...selectableDescendants];
+                    }
                     this.state = this.state.filter(val => !idsToRemove.includes(val));
                 }
             },
 
-            isChecked(id, selectableDescendants = []) {
+            isChecked(id, selectableDescendants = [], selectableLeafDescendants = []) {
                 if (!Array.isArray(this.state)) return false;
 
+                // leafOnly 模式下使用叶子节点判断
+                const checkIds = this.leafOnly ? selectableLeafDescendants : selectableDescendants;
+
                 // 如果有可选择的子节点，只有当所有可选择子节点都被选中时才返回 true
-                if (selectableDescendants.length > 0) {
-                    return selectableDescendants.every(d => this.state.includes(d));
+                if (checkIds.length > 0) {
+                    return checkIds.every(d => this.state.includes(d));
                 }
 
                 // 叶子节点：检查自身是否在 state 中
                 return this.state.includes(id);
             },
 
-            isIndeterminate(id, selectableDescendants) {
-                if (!Array.isArray(this.state) || selectableDescendants.length === 0) return false;
+            isIndeterminate(id, selectableDescendants, selectableLeafDescendants = []) {
+                // leafOnly 模式下使用叶子节点判断
+                const checkIds = this.leafOnly ? selectableLeafDescendants : selectableDescendants;
 
-                const checkedCount = selectableDescendants.filter(d => this.state.includes(d)).length;
+                if (!Array.isArray(this.state) || checkIds.length === 0) return false;
+
+                const checkedCount = checkIds.filter(d => this.state.includes(d)).length;
                 // 部分选中：有选中但不是全部可选择的
-                return checkedCount > 0 && checkedCount < selectableDescendants.length;
+                return checkedCount > 0 && checkedCount < checkIds.length;
             },
 
             toggleExpandAll(expand) {
@@ -232,13 +253,21 @@
                     items.forEach(item => {
                         // 如果当前节点被禁用或父节点被禁用，则跳过
                         const isDisabled = item._disabled || parentDisabled;
+                        const hasChildren = item.children && item.children.length > 0;
 
                         if (!isDisabled) {
-                            ids.push(item.id);
+                            // leafOnly 模式下只添加叶子节点
+                            if (this.leafOnly) {
+                                if (!hasChildren) {
+                                    ids.push(item.id);
+                                }
+                            } else {
+                                ids.push(item.id);
+                            }
                         }
 
                         // 递归处理子节点，传递当前禁用状态
-                        if (item.children && item.children.length) {
+                        if (hasChildren) {
                             ids = ids.concat(getAllIds(item.children, isDisabled));
                         }
                     });
