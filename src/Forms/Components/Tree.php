@@ -159,20 +159,9 @@ class Tree extends Field
     {
         $options = $this->evaluate($this->options);
         $disabledIds = $this->evaluate($this->disabledOptions) ?? [];
-        
-        // 获取当前选中的 ID 列表（用于预计算展开状态）
-        $currentState = $this->getState() ?? [];
-        
-        // 预处理数据：计算后代 ID，标记禁用状态，预计算展开状态
-        return $this->processNodes(
-            nodes: $options,
-            disabledIds: $disabledIds,
-            currentState: $currentState,
-            defaultExpanded: $this->getDefaultExpanded(),
-            expandSelected: $this->getExpandSelected(),
-            defaultOpenLevel: $this->getDefaultOpenLevel(),
-            level: 0
-        );
+
+        // 预处理数据：计算后代 ID，标记禁用状态
+        return $this->processNodes($options, $disabledIds);
     }
 
     /**
@@ -331,37 +320,14 @@ class Tree extends Field
 
     /**
      * 递归处理节点，添加元数据
-     *
-     * @param  array  $nodes  节点数组
-     * @param  array  $disabledIds  禁用的节点 ID 列表
-     * @param  array  $currentState  当前选中的节点 ID 列表
-     * @param  bool  $defaultExpanded  默认展开状态
-     * @param  bool  $expandSelected  是否展开已选中节点的父级
-     * @param  int|null  $defaultOpenLevel  默认展开层级
-     * @param  int  $level  当前层级
      */
-    protected function processNodes(
-        array $nodes,
-        array $disabledIds,
-        array $currentState = [],
-        bool $defaultExpanded = true,
-        bool $expandSelected = false,
-        ?int $defaultOpenLevel = null,
-        int $level = 0
-    ): array {
+    protected function processNodes(array $nodes, array $disabledIds): array
+    {
         $result = [];
 
         foreach ($nodes as $node) {
             $children = $node['children'] ?? [];
-            $processedChildren = $this->processNodes(
-                nodes: $children,
-                disabledIds: $disabledIds,
-                currentState: $currentState,
-                defaultExpanded: $defaultExpanded,
-                expandSelected: $expandSelected,
-                defaultOpenLevel: $defaultOpenLevel,
-                level: $level + 1
-            );
+            $processedChildren = $this->processNodes($children, $disabledIds);
 
             // 收集所有后代 ID (用于判断选中状态)
             $allDescendantIds = [];
@@ -402,29 +368,11 @@ class Tree extends Field
             // 判断当前节点是否被特定禁用
             $isNodeDisabled = in_array($node['id'], $disabledIds);
 
-            // === 预计算展开状态 ===
-            // 优先级: defaultOpenLevel > expandSelected > defaultExpanded
-            $initialOpen = $defaultExpanded;
-            
-            // 如果设置了 defaultOpenLevel，按层级展开
-            if ($defaultOpenLevel !== null) {
-                $initialOpen = $level < $defaultOpenLevel;
-            }
-            
-            // 如果启用了 expandSelected，检查是否有后代节点被选中
-            if ($expandSelected && ! empty($allDescendantIds)) {
-                $hasSelectedDescendant = ! empty(array_intersect($allDescendantIds, $currentState));
-                if ($hasSelectedDescendant) {
-                    $initialOpen = true;
-                }
-            }
-
             $node['children'] = $processedChildren;
             $node['_descendants'] = $allDescendantIds;
             $node['_selectableDescendants'] = $selectableDescendantIds;
             $node['_selectableLeafDescendants'] = $selectableLeafDescendantIds;
             $node['_disabled'] = $isNodeDisabled;
-            $node['_initialOpen'] = $initialOpen;
 
             $result[] = $node;
         }

@@ -18,25 +18,43 @@
     $selectableLeafDescendants = $node['_selectableLeafDescendants'] ?? [];
     $allDescendants = $node['_descendants'] ?? [];
 
-    // 使用 PHP 预计算的展开状态（已在 Tree.php processNodes 中计算）
-    $initialOpen = $node['_initialOpen'] ?? $defaultExpanded;
+    // 计算初始展开状态
+    // 优先级: defaultOpenLevel > expandSelected > defaultExpanded
+    $initialOpen = $defaultExpanded;
+
+    // 如果设置了 defaultOpenLevel，按层级展开
+    if ($defaultOpenLevel !== null) {
+        $initialOpen = $level < $defaultOpenLevel;
+    }
 @endphp
 
 <div
     x-data="{
         open: {{ $initialOpen ? 'true' : 'false' }},
-        @if($isSearchable)
+        expandSelected: {{ $expandSelected ? 'true' : 'false' }},
+        allDescendants: @js($allDescendants),
         nodeData: @js($node),
+
+        init() {
+            // 如果启用了 expandSelected，检查是否有子节点被选中
+            if (this.expandSelected && this.allDescendants.length > 0) {
+                const currentState = $wire.get('{{ $statePath }}') ?? [];
+                const hasSelectedDescendant = this.allDescendants.some(id => currentState.includes(id));
+                if (hasSelectedDescendant) {
+                    this.open = true;
+                }
+            }
+        },
+
         isVisible() {
             // 如果没有搜索功能或没有搜索内容，始终显示
-            if (!search || search.length === 0) return true;
+            if (!this.isSearchable || !search || search.length === 0) return true;
             // 使用父级的 nodeOrChildrenMatchSearch 方法
             return nodeOrChildrenMatchSearch(this.nodeData);
         }
-        @endif
     }"
     x-on:tree-expand-event.window="open = $event.detail.expand"
-    @if($isSearchable) x-show="isVisible()" @endif
+    x-show="{{ $isSearchable ? 'isVisible()' : 'true' }}"
     class="fi-fo-tree-node"
 >
     <div
