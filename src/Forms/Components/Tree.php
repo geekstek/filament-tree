@@ -379,4 +379,114 @@ class Tree extends Field
 
         return $result;
     }
+
+    /**
+     * 获取 jsTree 格式的数据
+     * 转换内部数据格式为 jsTree 所需的 JSON 格式
+     */
+    public function getJsTreeData(): array
+    {
+        $options = $this->evaluate($this->options);
+        $disabledIds = $this->evaluate($this->disabledOptions) ?? [];
+        $selectedIds = $this->getState() ?? [];
+        $defaultExpanded = $this->getDefaultExpanded();
+        $defaultOpenLevel = $this->getDefaultOpenLevel();
+
+        // 将所有 ID 转换为字符串以确保一致的比较
+        $disabledIds = array_map('strval', $disabledIds);
+        $selectedIds = array_map('strval', $selectedIds);
+
+        return $this->convertToJsTreeFormat($options, $disabledIds, $selectedIds, $defaultExpanded, $defaultOpenLevel, 0);
+    }
+
+    /**
+     * 递归转换节点为 jsTree 格式
+     */
+    protected function convertToJsTreeFormat(
+        array $nodes,
+        array $disabledIds,
+        array $selectedIds,
+        bool $defaultExpanded,
+        ?int $defaultOpenLevel,
+        int $currentLevel
+    ): array {
+        $result = [];
+
+        foreach ($nodes as $node) {
+            $nodeId = (string) $node['id'];  // 转换为字符串以确保一致比较
+            $hasChildren = ! empty($node['children']);
+            $isDisabled = in_array($nodeId, $disabledIds, true);  // 严格比较
+            $isSelected = in_array($nodeId, $selectedIds, true);  // 严格比较
+
+            // 计算展开状态
+            $isOpened = $defaultExpanded;
+            if ($defaultOpenLevel !== null) {
+                $isOpened = $currentLevel < $defaultOpenLevel;
+            }
+
+            // 构建 jsTree 节点
+            $jsTreeNode = [
+                'id' => (string) $nodeId,
+                'text' => $node['label'] ?? '',
+                'state' => [
+                    'opened' => $isOpened && $hasChildren,
+                    'disabled' => $isDisabled,
+                    'selected' => $isSelected,
+                ],
+                'li_attr' => [
+                    'data-id' => (string) $nodeId,
+                ],
+                'a_attr' => [
+                    'data-is-leaf' => $hasChildren ? 'false' : 'true',
+                ],
+            ];
+
+            // 递归处理子节点
+            if ($hasChildren) {
+                $jsTreeNode['children'] = $this->convertToJsTreeFormat(
+                    $node['children'],
+                    $disabledIds,
+                    $selectedIds,
+                    $defaultExpanded,
+                    $defaultOpenLevel,
+                    $currentLevel + 1
+                );
+            }
+
+            $result[] = $jsTreeNode;
+        }
+
+        return $result;
+    }
+
+    /**
+     * 获取所有叶子节点 ID 列表
+     * 用于 leafOnly 模式
+     */
+    public function getLeafNodeIds(): array
+    {
+        $options = $this->evaluate($this->options);
+
+        return $this->collectLeafIds($options);
+    }
+
+    /**
+     * 递归收集叶子节点 ID
+     */
+    protected function collectLeafIds(array $nodes): array
+    {
+        $leafIds = [];
+
+        foreach ($nodes as $node) {
+            $hasChildren = ! empty($node['children']);
+
+            if ($hasChildren) {
+                $leafIds = array_merge($leafIds, $this->collectLeafIds($node['children']));
+            } else {
+                $leafIds[] = $node['id'];
+            }
+        }
+
+        return $leafIds;
+    }
 }

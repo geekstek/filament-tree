@@ -1,57 +1,73 @@
 @php
     $statePath = $getStatePath();
-    $initialState = $getState() ?? [];
     $isSearchable = $isSearchable();
     $searchPrompt = $getSearchPrompt();
     $noSearchResultsMessage = $getNoSearchResultsMessage();
     $searchDebounce = $getSearchDebounce();
+    $maxHeight = $getMaxHeight();
+    $showToolbar = $getShowToolbar();
+    $isDisabled = $isDisabled();
+    $leafOnly = $isLeafOnly();
+    $expandSelected = $getExpandSelected();
+    $jsTreeData = $getJsTreeData();
+    $leafNodeIds = $getLeafNodeIds();
+
+    // 提取树结构（不包含选中状态）用于生成稳定的 wire:key
+    // 这样当只有选中状态变化时，不会触发组件完全替换
+    $extractStructure = function($nodes) use (&$extractStructure) {
+        return array_map(function($node) use (&$extractStructure) {
+            $structure = [
+                'id' => $node['id'],
+                'text' => $node['text'] ?? '',
+            ];
+            if (!empty($node['children'])) {
+                $structure['children'] = $extractStructure($node['children']);
+            }
+            return $structure;
+        }, $nodes);
+    };
+    
+    // 结构哈希 - 只在树结构变化时改变（节点增删）
+    $structureHash = md5(json_encode($extractStructure($jsTreeData)));
+    $uniqueId = 'jstree-' . $structureHash;
+    
+    // 数据哈希 - 包含完整数据（含选中状态），用于检测是否需要更新
+    $dataHash = md5(json_encode($jsTreeData));
+    
+    // 将配置编码为 base64 避免任何引号问题
+    $configJson = json_encode([
+        'containerId' => $uniqueId,
+        'statePath' => $statePath,
+        'isDisabled' => $isDisabled,
+        'leafOnly' => $leafOnly,
+        'expandSelected' => $expandSelected,
+        'isSearchable' => $isSearchable,
+        'searchDebounce' => $searchDebounce,
+        'treeData' => $jsTreeData,
+        'leafNodeIds' => $leafNodeIds,
+        'structureHash' => $structureHash,  // 用于 wire:key
+        'dataHash' => $dataHash,             // 用于检测数据变化
+    ]);
+    $configBase64 = base64_encode($configJson);
 @endphp
 
 <x-dynamic-component :component="$getFieldWrapperView()" :field="$field">
-    {{-- SVG Symbols - 只定义一次，所有节点复用 --}}
-    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
-        <symbol id="fi-tree-chevron-right" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
-        </symbol>
-        <symbol id="fi-tree-chevron-down" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
-        </symbol>
-        <symbol id="fi-tree-folder-open" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M2 6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Z" />
-        </symbol>
-        <symbol id="fi-tree-folder-closed" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
-        </symbol>
-        <symbol id="fi-tree-file" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M3 3.5A1.5 1.5 0 0 1 4.5 2h6.879a1.5 1.5 0 0 1 1.06.44l4.122 4.12A1.5 1.5 0 0 1 17 7.622V16.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 16.5v-13Z" />
-        </symbol>
-        <symbol id="fi-tree-search" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clip-rule="evenodd" />
-        </symbol>
-        <symbol id="fi-tree-check" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd" />
-        </symbol>
-        <symbol id="fi-tree-x" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" />
-        </symbol>
-    </svg>
-
     <style>
-        /* Tree Component Styles */
-        .fi-fo-tree {
+        .fi-jstree-container {
             border-radius: 0.5rem;
             overflow: hidden;
             border: 1px solid #e5e7eb;
             background-color: #ffffff;
         }
-        html.dark .fi-fo-tree,
-        .dark .fi-fo-tree {
+        html.dark .fi-jstree-container, .dark .fi-jstree-container {
             border-color: rgba(255, 255, 255, 0.1);
             background-color: #18181b;
         }
-        .fi-fo-tree.fi-disabled { opacity: 0.5; pointer-events: none; }
-
-        .fi-fo-tree-toolbar {
+        .fi-jstree-container.fi-disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .fi-jstree-toolbar {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
@@ -62,460 +78,577 @@
             border-bottom: 1px solid #e5e7eb;
             background-color: #f9fafb;
         }
-        html.dark .fi-fo-tree-toolbar,
-        .dark .fi-fo-tree-toolbar {
+        html.dark .fi-jstree-toolbar, .dark .fi-jstree-toolbar {
             border-color: rgba(255, 255, 255, 0.1);
             background-color: #27272a;
         }
-
-        .fi-fo-tree-toolbar-btn {
+        .fi-jstree-toolbar-btn {
             display: inline-flex;
             align-items: center;
             gap: 0.375rem;
             color: #2563eb;
             transition: color 0.15s;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            font: inherit;
         }
-        .fi-fo-tree-toolbar-btn:hover { color: #1d4ed8; }
-        html.dark .fi-fo-tree-toolbar-btn,
-        .dark .fi-fo-tree-toolbar-btn { color: #60a5fa; }
-        html.dark .fi-fo-tree-toolbar-btn:hover,
-        .dark .fi-fo-tree-toolbar-btn:hover { color: #93c5fd; }
-
-        .fi-fo-tree-toolbar-icon { width: 1rem; height: 1rem; }
-        .fi-fo-tree-toolbar-separator { color: #d1d5db; }
-        html.dark .fi-fo-tree-toolbar-separator,
-        .dark .fi-fo-tree-toolbar-separator { color: #3f3f46; }
-
-        .fi-fo-tree-content { padding: 0.5rem; overflow-y: auto; }
-
-        .fi-fo-tree-empty {
+        .fi-jstree-toolbar-btn:hover { color: #1d4ed8; }
+        html.dark .fi-jstree-toolbar-btn, .dark .fi-jstree-toolbar-btn { color: #60a5fa; }
+        html.dark .fi-jstree-toolbar-btn:hover, .dark .fi-jstree-toolbar-btn:hover { color: #93c5fd; }
+        .fi-jstree-toolbar-icon { width: 1rem; height: 1rem; }
+        .fi-jstree-toolbar-separator { color: #d1d5db; }
+        html.dark .fi-jstree-toolbar-separator, .dark .fi-jstree-toolbar-separator { color: #3f3f46; }
+        .fi-jstree-content { padding: 0.5rem; overflow-y: auto; }
+        .fi-jstree-empty {
             padding: 1.5rem;
             text-align: center;
             font-size: 0.875rem;
             font-style: italic;
             color: #6b7280;
         }
-        html.dark .fi-fo-tree-empty,
-        .dark .fi-fo-tree-empty { color: #a1a1aa; }
-
-        .fi-fo-tree-node-row {
-            display: flex;
-            align-items: center;
-            min-height: 36px;
-            border-radius: 0.375rem;
-            transition: background-color 0.1s;
-        }
-        .fi-fo-tree-node-row:hover { background-color: #f3f4f6; }
-        html.dark .fi-fo-tree-node-row:hover,
-        .dark .fi-fo-tree-node-row:hover { background-color: #27272a; }
-        .fi-fo-tree-node-row.fi-fo-tree-node-checked { background-color: #eff6ff; }
-        html.dark .fi-fo-tree-node-row.fi-fo-tree-node-checked,
-        .dark .fi-fo-tree-node-row.fi-fo-tree-node-checked { background-color: rgba(59, 130, 246, 0.15); }
-        .fi-fo-tree-node-row.fi-fo-tree-node-checked:hover { background-color: #dbeafe; }
-        html.dark .fi-fo-tree-node-row.fi-fo-tree-node-checked:hover,
-        .dark .fi-fo-tree-node-row.fi-fo-tree-node-checked:hover { background-color: rgba(59, 130, 246, 0.25); }
-
-        .fi-fo-tree-node-toggle {
-            width: 1.5rem;
-            height: 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        .fi-fo-tree-node-toggle-btn {
-            width: 1.25rem;
-            height: 1.25rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 0.25rem;
-            color: #6b7280;
-            transition: all 0.15s;
-        }
-        .fi-fo-tree-node-toggle-btn:hover { color: #374151; background-color: #e5e7eb; }
-        html.dark .fi-fo-tree-node-toggle-btn,
-        .dark .fi-fo-tree-node-toggle-btn { color: #a1a1aa; }
-        html.dark .fi-fo-tree-node-toggle-btn:hover,
-        .dark .fi-fo-tree-node-toggle-btn:hover { color: #e4e4e7; background-color: #3f3f46; }
-        .fi-fo-tree-node-toggle-icon { width: 1rem; height: 1rem; }
-
-        .fi-fo-tree-checkbox { flex-shrink: 0; margin-right: 0.5rem; }
-
-        .fi-fo-tree-node-icon {
-            width: 1.25rem;
-            height: 1.25rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            margin-right: 0.375rem;
-        }
-        .fi-fo-tree-folder-icon { width: 1rem; height: 1rem; }
-        .fi-fo-tree-folder-open { color: #f59e0b; }
-        html.dark .fi-fo-tree-folder-open,
-        .dark .fi-fo-tree-folder-open { color: #fbbf24; }
-        .fi-fo-tree-folder-closed { color: #d97706; }
-        html.dark .fi-fo-tree-folder-closed,
-        .dark .fi-fo-tree-folder-closed { color: #f59e0b; }
-        .fi-fo-tree-file-icon { width: 1rem; height: 1rem; color: #9ca3af; }
-        html.dark .fi-fo-tree-file-icon,
-        .dark .fi-fo-tree-file-icon { color: #71717a; }
-
-        .fi-fo-tree-node-label {
-            flex: 1;
-            padding: 0.375rem 0.5rem 0.375rem 0;
-            font-size: 0.875rem;
-            cursor: pointer;
-            user-select: none;
+        html.dark .fi-jstree-empty, .dark .fi-jstree-empty { color: #a1a1aa; }
+        .fi-jstree-content .jstree-default .jstree-node,
+        .fi-jstree-content .jstree-default .jstree-icon { background-image: none; }
+        .fi-jstree-content .jstree-default .jstree-anchor {
             color: #374151;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
         }
-        html.dark .fi-fo-tree-node-label,
-        .dark .fi-fo-tree-node-label { color: #e4e4e7; }
-        .fi-fo-tree-node-label.fi-fo-tree-node-disabled {
-            cursor: not-allowed;
-            color: #9ca3af;
-            text-decoration: line-through;
+        html.dark .fi-jstree-content .jstree-default .jstree-anchor,
+        .dark .fi-jstree-content .jstree-default .jstree-anchor { color: #e4e4e7; }
+        .fi-jstree-content .jstree-default .jstree-anchor:hover {
+            background-color: #f3f4f6;
+            box-shadow: none;
         }
-        html.dark .fi-fo-tree-node-label.fi-fo-tree-node-disabled,
-        .dark .fi-fo-tree-node-label.fi-fo-tree-node-disabled { color: #71717a; }
-        .fi-fo-tree-node-label.fi-fo-tree-node-label-checked { font-weight: 500; color: #111827; }
-        html.dark .fi-fo-tree-node-label.fi-fo-tree-node-label-checked,
-        .dark .fi-fo-tree-node-label.fi-fo-tree-node-label-checked { color: #ffffff; }
-        .fi-fo-tree-node-disabled-text { margin-left: 0.375rem; font-size: 0.75rem; color: #9ca3af; }
-        html.dark .fi-fo-tree-node-disabled-text,
-        .dark .fi-fo-tree-node-disabled-text { color: #71717a; }
-
-        .fi-fo-tree-node-count {
-            padding-right: 0.5rem;
-            font-size: 0.75rem;
-            font-variant-numeric: tabular-nums;
-            color: #9ca3af;
+        html.dark .fi-jstree-content .jstree-default .jstree-anchor:hover,
+        .dark .fi-jstree-content .jstree-default .jstree-anchor:hover { background-color: #27272a; }
+        .fi-jstree-content .jstree-default .jstree-clicked {
+            background-color: #eff6ff !important;
+            color: #1d4ed8;
+            box-shadow: none;
         }
-        html.dark .fi-fo-tree-node-count,
-        .dark .fi-fo-tree-node-count { color: #71717a; }
-
-        /* Search styles */
-        .fi-fo-tree-search {
-            padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid #e5e7eb;
-            background-color: #f9fafb;
+        html.dark .fi-jstree-content .jstree-default .jstree-clicked,
+        .dark .fi-jstree-content .jstree-default .jstree-clicked {
+            background-color: rgba(59, 130, 246, 0.15) !important;
+            color: #93c5fd;
         }
-        html.dark .fi-fo-tree-search,
-        .dark .fi-fo-tree-search {
-            border-color: rgba(255, 255, 255, 0.1);
-            background-color: #27272a;
-        }
-        .fi-fo-tree-search-input-wrp {
-            position: relative;
-            display: flex;
-            align-items: center;
-        }
-        .fi-fo-tree-search-icon {
-            position: absolute;
-            left: 0.625rem;
+        .fi-jstree-content .jstree-default .jstree-checkbox {
+            background-image: none;
             width: 1rem;
             height: 1rem;
-            color: #9ca3af;
-            pointer-events: none;
+            margin-right: 0.25rem;
+            position: relative;
+            border: 2px solid #d1d5db;
+            border-radius: 0.25rem;
+            background-color: #ffffff;
         }
-        html.dark .fi-fo-tree-search-icon,
-        .dark .fi-fo-tree-search-icon { color: #71717a; }
-        .fi-fo-tree-search-input {
+        html.dark .fi-jstree-content .jstree-default .jstree-checkbox,
+        .dark .fi-jstree-content .jstree-default .jstree-checkbox {
+            border-color: #52525b;
+            background-color: #27272a;
+        }
+        .fi-jstree-content .jstree-default .jstree-checked > .jstree-checkbox {
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
+        .fi-jstree-content .jstree-default .jstree-checked > .jstree-checkbox::after {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: 0px;
+            width: 5px;
+            height: 9px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+        /* Undetermined 状态 - 部分子节点选中时显示横线 */
+        /* 注意：jstree-undetermined 类是应用在 checkbox <i> 元素本身 */
+        .fi-jstree-content .jstree-default .jstree-checkbox.jstree-undetermined {
+            background-color: #2563eb !important;
+            border-color: #2563eb !important;
+        }
+        .fi-jstree-content .jstree-default .jstree-checkbox.jstree-undetermined::after {
+            content: '' !important;
+            position: absolute !important;
+            left: 2px !important;
+            top: 5px !important;
+            width: 8px !important;
+            height: 2px !important;
+            background-color: white !important;
+            border: none !important;
+            transform: none !important;
+        }
+        .fi-jstree-content .jstree-default .jstree-icon.jstree-ocl {
+            background-image: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            position: relative;
+        }
+        .fi-jstree-content .jstree-default .jstree-icon.jstree-ocl::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid #6b7280;
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+            transition: transform 0.15s;
+        }
+        html.dark .fi-jstree-content .jstree-default .jstree-icon.jstree-ocl::before,
+        .dark .fi-jstree-content .jstree-default .jstree-icon.jstree-ocl::before { border-left-color: #a1a1aa; }
+        .fi-jstree-content .jstree-default .jstree-open > .jstree-icon.jstree-ocl::before {
+            transform: translate(-50%, -50%) rotate(90deg);
+        }
+        .fi-jstree-content .jstree-default .jstree-disabled {
+            color: #9ca3af !important;
+            text-decoration: line-through;
+        }
+        html.dark .fi-jstree-content .jstree-default .jstree-disabled,
+        .dark .fi-jstree-content .jstree-default .jstree-disabled { color: #71717a !important; }
+        .fi-jstree-search-wrapper {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        html.dark .fi-jstree-search-wrapper, .dark .fi-jstree-search-wrapper {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .fi-jstree-search-input {
             width: 100%;
-            padding: 0.5rem 0.75rem 0.5rem 2rem;
-            font-size: 0.875rem;
+            padding: 0.5rem 0.75rem;
             border: 1px solid #d1d5db;
             border-radius: 0.375rem;
+            font-size: 0.875rem;
             background-color: #ffffff;
-            color: #111827;
-            outline: none;
-            transition: border-color 0.15s, box-shadow 0.15s;
+            color: #374151;
         }
-        .fi-fo-tree-search-input:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 1px #3b82f6;
-        }
-        html.dark .fi-fo-tree-search-input,
-        .dark .fi-fo-tree-search-input {
-            border-color: #3f3f46;
-            background-color: #18181b;
+        html.dark .fi-jstree-search-input, .dark .fi-jstree-search-input {
+            border-color: #52525b;
+            background-color: #27272a;
             color: #e4e4e7;
         }
-        html.dark .fi-fo-tree-search-input:focus,
-        .dark .fi-fo-tree-search-input:focus {
-            border-color: #60a5fa;
-            box-shadow: 0 0 0 1px #60a5fa;
+        .fi-jstree-search-input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 1px #2563eb;
         }
-        .fi-fo-tree-search-input::placeholder { color: #9ca3af; }
-        html.dark .fi-fo-tree-search-input::placeholder,
-        .dark .fi-fo-tree-search-input::placeholder { color: #71717a; }
-        .fi-fo-tree-no-results {
-            padding: 1.5rem;
+        .fi-jstree-no-results {
+            padding: 1rem;
             text-align: center;
             font-size: 0.875rem;
             color: #6b7280;
+            display: none;
         }
-        html.dark .fi-fo-tree-no-results,
-        .dark .fi-fo-tree-no-results { color: #a1a1aa; }
-        .fi-fo-tree-node-hidden { display: none !important; }
+        html.dark .fi-jstree-no-results, .dark .fi-jstree-no-results { color: #a1a1aa; }
     </style>
 
+    {{-- 配置数据 (Base64 编码) --}}
+    {{-- structureHash: 只在树结构变化时改变，用于判断是否需要重新初始化 --}}
+    <input type="hidden" id="{{ $uniqueId }}-config" data-structure-hash="{{ $structureHash }}" value="{{ $configBase64 }}" />
+
+    {{-- Alpine.js 组件 - 使用 dataHash 作为 key 来触发重新初始化 --}}
     <div
         x-data="{
-            state: @js($initialState),
-            search: '',
-            isGlobalDisabled: {{ $isDisabled() ? 'true' : 'false' }},
-            defaultExpanded: {{ $getDefaultExpanded() ? 'true' : 'false' }},
-            expandSelected: {{ $getExpandSelected() ? 'true' : 'false' }},
-            defaultOpenLevel: {{ $getDefaultOpenLevel() ?? 'null' }},
-            leafOnly: {{ $isLeafOnly() ? 'true' : 'false' }},
-            isSearchable: {{ $isSearchable ? 'true' : 'false' }},
-
+            tree: null,
+            cfg: null,
+            leafSet: null,
+            initialized: false,
+            currentHash: null,
+            searchTimeout: null,
+            
             init() {
-                // 监听 state 变化并同步到 Livewire
-                this.$watch('state', (value) => {
-                    $wire.set('{{ $statePath }}', value);
-                });
-
-                // 搜索时自动展开所有节点
-                this.$watch('search', (value) => {
-                    if (value && value.length > 0) {
-                        this.toggleExpandAll(true);
-                    }
-                });
+                var self = this;
+                self.loadConfig();
             },
-
-            // 检查节点是否匹配搜索
-            matchesSearch(label) {
-                if (!this.search || this.search.length === 0) return true;
-                return label.toLowerCase().includes(this.search.toLowerCase());
-            },
-
-            // 检查节点或其子节点是否匹配搜索
-            nodeOrChildrenMatchSearch(node) {
-                if (!this.search || this.search.length === 0) return true;
-                
-                // 检查当前节点
-                if (this.matchesSearch(node.label)) return true;
-                
-                // 递归检查子节点
-                if (node.children && node.children.length > 0) {
-                    return node.children.some(child => this.nodeOrChildrenMatchSearch(child));
+            
+            loadConfig() {
+                var self = this;
+                var configEl = document.getElementById('{{ $uniqueId }}-config');
+                if (!configEl) { 
+                    console.log('[jsTree] 找不到配置元素，等待 DOM 更新...');
+                    return; 
                 }
                 
-                return false;
-            },
-
-            // 获取匹配的节点数量
-            getMatchCount(nodes) {
-                if (!this.search || this.search.length === 0) return -1;
+                var newHash = configEl.dataset.structureHash;
                 
-                let count = 0;
-                const countMatches = (items) => {
-                    items.forEach(item => {
-                        if (this.matchesSearch(item.label)) count++;
-                        if (item.children) countMatches(item.children);
-                    });
-                };
-                countMatches(nodes);
-                return count;
-            },
-
-            toggleNode(id, selectableDescendants, allDescendants, isNodeDisabled, selectableLeafDescendants) {
-                if (this.isGlobalDisabled || isNodeDisabled) return;
-
-                if (!Array.isArray(this.state)) this.state = [];
-
-                // 对于有子节点的父节点，检查是否所有可选择的子节点都已选中
-                const hasSelectableDescendants = selectableDescendants.length > 0;
-                let shouldSelect;
-
-                // leafOnly 模式下使用叶子节点判断
-                const checkIds = this.leafOnly ? selectableLeafDescendants : selectableDescendants;
-
-                if (hasSelectableDescendants) {
-                    // 父节点：根据可选择子节点的选中状态来决定
-                    const allSelectableSelected = checkIds.every(d => this.state.includes(d));
-                    shouldSelect = !allSelectableSelected;
-                } else if (allDescendants.length > 0) {
-                    // 有子节点但都是禁用的，不允许操作
+                // 检查树容器是否存在且 jsTree 实例是否还在
+                var containerId = self.cfg ? self.cfg.containerId : '{{ $uniqueId }}';
+                var containerEl = document.getElementById(containerId);
+                var treeStillExists = containerEl && 
+                    typeof jQuery !== 'undefined' && 
+                    jQuery(containerEl).hasClass('jstree');
+                
+                // 如果哈希相同且树仍然存在于 DOM 中，跳过初始化
+                if (self.currentHash === newHash && self.initialized && treeStillExists) {
+                    console.log('[jsTree] 数据未变化且树存在，跳过初始化');
                     return;
-                } else {
-                    // 叶子节点：切换自身状态
-                    shouldSelect = !this.state.includes(id);
                 }
-
-                if (shouldSelect) {
-                    // 选中：leafOnly 模式只添加叶子节点，否则添加自身和所有可选择的子节点
-                    let idsToAdd;
-                    if (this.leafOnly) {
-                        // 如果是叶子节点（没有子节点），添加自身；否则只添加可选择的叶子后代
-                        idsToAdd = selectableLeafDescendants.length > 0 ? selectableLeafDescendants : [id];
-                    } else {
-                        idsToAdd = [id, ...selectableDescendants];
-                    }
-                    const newState = new Set([...this.state, ...idsToAdd]);
-                    this.state = Array.from(newState);
-                } else {
-                    // 取消选中：leafOnly 模式只移除叶子节点，否则移除自身和所有可选择的子节点
-                    let idsToRemove;
-                    if (this.leafOnly) {
-                        idsToRemove = selectableLeafDescendants.length > 0 ? selectableLeafDescendants : [id];
-                    } else {
-                        idsToRemove = [id, ...selectableDescendants];
-                    }
-                    this.state = this.state.filter(val => !idsToRemove.includes(val));
+                
+                // 如果树不存在了（Livewire 重新渲染导致 DOM 被替换），重置状态
+                if (!treeStillExists) {
+                    self.initialized = false;
+                    self.tree = null;
+                }
+                
+                try {
+                    self.cfg = JSON.parse(atob(configEl.value));
+                    self.leafSet = new Set((self.cfg.leafNodeIds || []).map(function(x) { return String(x); }));
+                    self.currentHash = newHash;
+                } catch(e) { 
+                    console.error('[jsTree] 配置解析失败:', e); 
+                    return; 
+                }
+                
+                if (self.cfg.treeData.length === 0) { 
+                    self.destroyTree();
+                    return; 
+                }
+                
+                self.loadDependencies();
+            },
+            
+            destroyTree() {
+                var self = this;
+                if (self.tree) {
+                    try {
+                        jQuery('#' + self.cfg.containerId).jstree('destroy');
+                    } catch(e) {}
+                    self.tree = null;
+                    self.initialized = false;
                 }
             },
-
-            isChecked(id, selectableDescendants = [], selectableLeafDescendants = []) {
-                if (!Array.isArray(this.state)) return false;
-
-                // 转换为字符串进行比较（解决类型不匹配问题）
-                const stateStrings = this.state.map(v => String(v));
-                const idString = String(id);
-
-                // leafOnly 模式下使用叶子节点判断
-                const checkIds = this.leafOnly ? selectableLeafDescendants : selectableDescendants;
-
-                // 如果有可选择的子节点，只有当所有可选择子节点都被选中时才返回 true
-                if (checkIds.length > 0) {
-                    return checkIds.every(d => stateStrings.includes(String(d)));
-                }
-
-                // 叶子节点：检查自身是否在 state 中
-                return stateStrings.includes(idString);
-            },
-
-            isIndeterminate(id, selectableDescendants, selectableLeafDescendants = []) {
-                // leafOnly 模式下使用叶子节点判断
-                const checkIds = this.leafOnly ? selectableLeafDescendants : selectableDescendants;
-
-                if (!Array.isArray(this.state) || checkIds.length === 0) return false;
-
-                const checkedCount = checkIds.filter(d => this.state.includes(d)).length;
-                // 部分选中：有选中但不是全部可选择的
-                return checkedCount > 0 && checkedCount < checkIds.length;
-            },
-
-            toggleExpandAll(expand) {
-                this.$dispatch('tree-expand-event', { expand: expand });
-            },
-
-            selectAll(nodes) {
-                if (this.isGlobalDisabled) return;
-
-                const getAllIds = (items, parentDisabled = false) => {
-                    let ids = [];
-                    items.forEach(item => {
-                        // 如果当前节点被禁用或父节点被禁用，则跳过
-                        const isDisabled = item._disabled || parentDisabled;
-                        const hasChildren = item.children && item.children.length > 0;
-
-                        if (!isDisabled) {
-                            // leafOnly 模式下只添加叶子节点
-                            if (this.leafOnly) {
-                                if (!hasChildren) {
-                                    ids.push(item.id);
-                                }
-                            } else {
-                                ids.push(item.id);
-                            }
-                        }
-
-                        // 递归处理子节点，传递当前禁用状态
-                        if (hasChildren) {
-                            ids = ids.concat(getAllIds(item.children, isDisabled));
-                        }
+            
+            loadDependencies() {
+                var self = this;
+                var jqUrl = 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js';
+                var jsTreeCss = 'https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.17/themes/default/style.min.css';
+                var jsTreeJs = 'https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.17/jstree.min.js';
+                
+                self.loadCss(jsTreeCss);
+                
+                if (typeof jQuery === 'undefined') {
+                    // 检查是否有其他组件正在加载 jQuery
+                    var jqScriptExists = Array.from(document.scripts).some(function(s) { 
+                        return s.src && s.src.indexOf('jquery') > -1; 
                     });
-                    return ids;
-                };
-
-                const allIds = getAllIds(nodes, false);
-                this.state = allIds;
+                    
+                    if (jqScriptExists) {
+                        self.waitForJQuery(function() {
+                            self.loadJsTreeLib(jsTreeJs);
+                        });
+                    } else {
+                        self.loadJs(jqUrl, function() {
+                            self.waitForJQuery(function() {
+                                self.loadJsTreeLib(jsTreeJs);
+                            });
+                        });
+                    }
+                } else {
+                    self.loadJsTreeLib(jsTreeJs);
+                }
             },
-
+            
+            loadCss(url) {
+                var exists = Array.from(document.styleSheets).some(function(s) { 
+                    return s.href && s.href.indexOf('jstree') > -1; 
+                });
+                if (exists) return;
+                var l = document.createElement('link');
+                l.rel = 'stylesheet';
+                l.href = url;
+                document.head.appendChild(l);
+            },
+            
+            loadJs(url, cb) {
+                var exists = Array.from(document.scripts).some(function(s) { return s.src === url; });
+                if (!exists) {
+                    var s = document.createElement('script');
+                    s.src = url;
+                    s.onload = cb;
+                    document.head.appendChild(s);
+                } else {
+                    // 脚本已存在，等待它加载完成
+                    cb();
+                }
+            },
+            
+            waitForJQuery(cb) {
+                var self = this;
+                if (typeof jQuery !== 'undefined') {
+                    cb();
+                } else {
+                    // jQuery 还没加载完，等待
+                    setTimeout(function() { self.waitForJQuery(cb); }, 50);
+                }
+            },
+            
+            waitForJsTree(cb) {
+                var self = this;
+                if (typeof jQuery !== 'undefined' && typeof jQuery.fn.jstree !== 'undefined') {
+                    cb();
+                } else {
+                    // jsTree 还没加载完，等待
+                    setTimeout(function() { self.waitForJsTree(cb); }, 50);
+                }
+            },
+            
+            loadJsTreeLib(url) {
+                var self = this;
+                // 先确保 jQuery 已加载
+                self.waitForJQuery(function() {
+                    if (typeof jQuery.fn.jstree === 'undefined') {
+                        self.loadJs(url, function() {
+                            // 等待 jsTree 真正可用
+                            self.waitForJsTree(function() {
+                                self.initJsTree();
+                            });
+                        });
+                    } else {
+                        self.initJsTree();
+                    }
+                });
+            },
+            
+            initJsTree() {
+                var self = this;
+                
+                var $ = jQuery;
+                var $container = $('#' + self.cfg.containerId);
+                
+                if ($container.length === 0) { 
+                    console.error('[jsTree] 容器不存在:', self.cfg.containerId); 
+                    return; 
+                }
+                
+                // 如果已有 jsTree 实例，先销毁
+                if ($container.hasClass('jstree')) {
+                    $container.jstree('destroy');
+                }
+                
+                var plugins = ['checkbox', 'wholerow'];
+                if (self.cfg.isSearchable) plugins.push('search');
+                
+                $container.jstree({
+                    core: { 
+                        data: self.cfg.treeData, 
+                        themes: { dots: false, icons: true }, 
+                        multiple: true, 
+                        animation: 150 
+                    },
+                    checkbox: { 
+                        three_state: true, 
+                        // up: 所有子节点选中时父节点自动选中
+                        // down: 选中父节点时所有子节点自动选中
+                        // undetermined: 部分子节点选中时父节点显示横线标记
+                        cascade: 'up+down+undetermined', 
+                        tie_selection: false,  // 分离选中和勾选状态
+                        whole_node: false 
+                    },
+                    search: {
+                        show_only_matches: true,
+                        show_only_matches_children: true
+                    },
+                    plugins: plugins
+                });
+                
+                self.tree = $container.jstree(true);
+                self.initialized = true;
+                
+                // ready 事件 - 直接设置内部状态（最快方法）
+                $container.on('ready.jstree', function() {
+                    // 从 treeData 中提取所有 selected=true 的节点 ID
+                    var selectedIds = [];
+                    function collectSelected(nodes) {
+                        nodes.forEach(function(node) {
+                            if (node.state && node.state.selected) {
+                                selectedIds.push(node.id);
+                            }
+                            if (node.children) {
+                                collectSelected(node.children);
+                            }
+                        });
+                    }
+                    collectSelected(self.cfg.treeData);
+                                        
+                    if (selectedIds.length > 0) {
+                        var model = self.tree._model.data;
+                        var startTime = performance.now();
+                        
+                        // 关键: 获取 checkbox 插件的内部选中数组
+                        var checkboxSelected = self.tree._data.checkbox.selected;
+                        
+                        // 1. 直接设置 checked 状态 + 更新内部追踪数组
+                        selectedIds.forEach(function(id) {
+                            if (model[id]) {
+                                model[id].state.checked = true;
+                                // 同时更新 checkbox 插件的内部数组（get_checked 依赖这个）
+                                if (checkboxSelected.indexOf(id) === -1) {
+                                    checkboxSelected.push(id);
+                                }
+                            }
+                        });
+                        
+                        // 2. 从下往上计算父节点状态
+                        var parentsToCheck = new Set();
+                        selectedIds.forEach(function(id) {
+                            if (model[id]) {
+                                var parentId = model[id].parent;
+                                while (parentId && parentId !== '#') {
+                                    parentsToCheck.add(parentId);
+                                    parentId = model[parentId] ? model[parentId].parent : null;
+                                }
+                            }
+                        });
+                        
+                        // 按深度排序（从深到浅处理）
+                        var sortedParents = Array.from(parentsToCheck).sort(function(a, b) {
+                            var depthA = 0, depthB = 0;
+                            var pa = a, pb = b;
+                            while (model[pa] && model[pa].parent !== '#') { depthA++; pa = model[pa].parent; }
+                            while (model[pb] && model[pb].parent !== '#') { depthB++; pb = model[pb].parent; }
+                            return depthB - depthA;
+                        });
+                        
+                        // 检查每个父节点：如果所有子节点都勾选，则父节点也勾选
+                        sortedParents.forEach(function(parentId) {
+                            var parent = model[parentId];
+                            if (parent && parent.children && parent.children.length > 0) {
+                                var allChildrenChecked = parent.children.every(function(childId) {
+                                    return model[childId] && model[childId].state.checked;
+                                });
+                                if (allChildrenChecked) {
+                                    parent.state.checked = true;
+                                    // 同时更新内部数组
+                                    if (checkboxSelected.indexOf(parentId) === -1) {
+                                        checkboxSelected.push(parentId);
+                                    }
+                                }
+                            }
+                        });
+                        
+                        // 3. 计算 undetermined 状态
+                        self.tree._undetermined();
+                        
+                        // 4. 重绘树
+                        self.tree.redraw(true);
+                        
+                        var endTime = performance.now();
+                        console.log('[jsTree] 勾选完成，耗时:', Math.round(endTime - startTime), 'ms');
+                        console.log('[jsTree] checkbox.selected 数组长度:', checkboxSelected.length);
+                    }
+                });
+                
+                // checkbox 变化事件 - 同步到 Livewire (不触发重新渲染)
+                $container.on('check_node.jstree uncheck_node.jstree', function(e, data) {
+                    if (self.cfg.isDisabled) return;
+                    
+                    var ids = self.tree.get_checked();
+                    if (self.cfg.leafOnly) {
+                        ids = ids.filter(function(x) { return self.leafSet.has(String(x)); });
+                    }
+                    
+                    // 更新 Livewire 状态，允许重新渲染以支持 live() 
+                    // 注意：loadConfig() 会检测树是否需要重新初始化
+                    if (typeof $wire !== 'undefined') {
+                        $wire.$set(self.cfg.statePath, ids);
+                    }
+                });
+            },
+            
+            expandAll() {
+                if (this.tree) this.tree.open_all();
+            },
+            
+            collapseAll() {
+                if (this.tree) this.tree.close_all();
+            },
+            
+            selectAll() {
+                if (this.tree) this.tree.check_all();
+            },
+            
             deselectAll() {
-                if (this.isGlobalDisabled) return;
-                this.state = [];
+                if (this.tree) this.tree.uncheck_all();
+            },
+            
+            doSearch(query) {
+                var self = this;
+                if (!self.tree || !self.cfg.isSearchable) return;
+                
+                clearTimeout(self.searchTimeout);
+                self.searchTimeout = setTimeout(function() {
+                    self.tree.search(query);
+                    
+                    var noResultsEl = document.getElementById(self.cfg.containerId + '-no-results');
+                    if (noResultsEl) {
+                        var hasResults = jQuery('#' + self.cfg.containerId + ' .jstree-search').length > 0;
+                        noResultsEl.style.display = (query && !hasResults) ? 'block' : 'none';
+                    }
+                }, self.cfg.searchDebounce || 300);
             }
         }"
-        class="fi-fo-tree"
-        :class="{ 'fi-disabled': isGlobalDisabled }"
+        x-init="init()"
+        wire:key="jstree-{{ $structureHash }}"
+        class="fi-jstree-wrapper"
     >
-        {{-- 搜索框 --}}
-        @if($isSearchable && !$isDisabled())
-            <div class="fi-fo-tree-search">
-                <div class="fi-fo-tree-search-input-wrp">
-                    <svg class="fi-fo-tree-search-icon"><use href="#fi-tree-search"></use></svg>
-                    <input
-                        type="search"
-                        x-model.debounce.{{ $searchDebounce }}ms="search"
+        <div class="fi-jstree-container {{ $isDisabled ? 'fi-disabled' : '' }}">
+            @if($isSearchable)
+                <div class="fi-jstree-search-wrapper">
+                    <input 
+                        type="text" 
+                        class="fi-jstree-search-input"
                         placeholder="{{ $searchPrompt }}"
-                        class="fi-fo-tree-search-input"
+                        x-on:input="doSearch($event.target.value)"
                     />
                 </div>
-            </div>
-        @endif
-
-        {{-- 工具栏 --}}
-        @if($getShowToolbar() && !$isDisabled())
-            <div class="fi-fo-tree-toolbar">
-                <button type="button" @click="toggleExpandAll(true)" class="fi-fo-tree-toolbar-btn">
-                    <svg class="fi-fo-tree-toolbar-icon"><use href="#fi-tree-chevron-down"></use></svg>
-                    <span>{{ __('geekstek-filament-tree::filament-tree.toolbar.expand_all') }}</span>
-                </button>
-
-                <span class="fi-fo-tree-toolbar-separator">|</span>
-
-                <button type="button" @click="toggleExpandAll(false)" class="fi-fo-tree-toolbar-btn">
-                    <svg class="fi-fo-tree-toolbar-icon"><use href="#fi-tree-chevron-right"></use></svg>
-                    <span>{{ __('geekstek-filament-tree::filament-tree.toolbar.collapse_all') }}</span>
-                </button>
-
-                <span class="fi-fo-tree-toolbar-separator">|</span>
-
-                <button type="button" @click="selectAll(@js($getTreeData()))" class="fi-fo-tree-toolbar-btn">
-                    <svg class="fi-fo-tree-toolbar-icon"><use href="#fi-tree-check"></use></svg>
-                    <span>{{ __('geekstek-filament-tree::filament-tree.toolbar.select_all') }}</span>
-                </button>
-
-                <span class="fi-fo-tree-toolbar-separator">|</span>
-
-                <button type="button" @click="deselectAll()" class="fi-fo-tree-toolbar-btn">
-                    <svg class="fi-fo-tree-toolbar-icon"><use href="#fi-tree-x"></use></svg>
-                    <span>{{ __('geekstek-filament-tree::filament-tree.toolbar.deselect_all') }}</span>
-                </button>
-            </div>
-        @endif
-
-        <div class="fi-fo-tree-content" @if($getMaxHeight()) style="max-height: {{ $getMaxHeight() }}" @endif>
-            @if(empty($getTreeData()))
-                <p class="fi-fo-tree-empty">
-                    {{ __('geekstek-filament-tree::filament-tree.empty.no_data') }}
-                </p>
-            @else
-                {{-- 无搜索结果提示 --}}
-                <template x-if="search && getMatchCount(@js($getTreeData())) === 0">
-                    <p class="fi-fo-tree-no-results">{{ $noSearchResultsMessage }}</p>
-                </template>
-
-                <div class="fi-fo-tree-nodes">
-                    @foreach($getTreeData() as $node)
-                        @include('geekstek-filament-tree::forms.tree-item', [
-                            'node' => $node,
-                            'statePath' => $statePath,
-                            'defaultExpanded' => $getDefaultExpanded(),
-                            'expandSelected' => $getExpandSelected(),
-                            'defaultOpenLevel' => $getDefaultOpenLevel(),
-                            'level' => 0,
-                            'parentDisabled' => false,
-                            'isSearchable' => $isSearchable,
-                        ])
-                    @endforeach
+            @endif
+            
+            @if($showToolbar && !$isDisabled)
+                <div class="fi-jstree-toolbar">
+                    <button type="button" x-on:click="expandAll()" class="fi-jstree-toolbar-btn">
+                        <span>▼</span>
+                        <span>{{ __('geekstek-filament-tree::filament-tree.toolbar.expand_all') }}</span>
+                    </button>
+                    <span class="fi-jstree-toolbar-separator">|</span>
+                    <button type="button" x-on:click="collapseAll()" class="fi-jstree-toolbar-btn">
+                        <span>▶</span>
+                        <span>{{ __('geekstek-filament-tree::filament-tree.toolbar.collapse_all') }}</span>
+                    </button>
+                    <span class="fi-jstree-toolbar-separator">|</span>
+                    <button type="button" x-on:click="selectAll()" class="fi-jstree-toolbar-btn">
+                        <span>✓</span>
+                        <span>{{ __('geekstek-filament-tree::filament-tree.toolbar.select_all') }}</span>
+                    </button>
+                    <span class="fi-jstree-toolbar-separator">|</span>
+                    <button type="button" x-on:click="deselectAll()" class="fi-jstree-toolbar-btn">
+                        <span>✗</span>
+                        <span>{{ __('geekstek-filament-tree::filament-tree.toolbar.deselect_all') }}</span>
+                    </button>
                 </div>
             @endif
+
+            {{-- wire:ignore 防止 Livewire 在选中状态变化时破坏 jsTree 的 DOM --}}
+            <div class="fi-jstree-content" wire:ignore @if($maxHeight) style="max-height: {{ $maxHeight }}" @endif>
+                @if(empty($jsTreeData))
+                    <p class="fi-jstree-empty">
+                        {{ __('geekstek-filament-tree::filament-tree.empty.no_data') }}
+                    </p>
+                @else
+                    <div id="{{ $uniqueId }}"></div>
+                    @if($isSearchable)
+                        <div id="{{ $uniqueId }}-no-results" class="fi-jstree-no-results">
+                            {{ $noSearchResultsMessage }}
+                        </div>
+                    @endif
+                @endif
+            </div>
         </div>
     </div>
 </x-dynamic-component>
